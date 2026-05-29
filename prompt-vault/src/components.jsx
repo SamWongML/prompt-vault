@@ -31,6 +31,7 @@ const I = {
   chevron: "M9 6l6 6-6 6",
   panelRight: "M4 5h16v14H4zM15 5v14",
   clock: "M12 7v5l3 2M12 21a9 9 0 100-18 9 9 0 000 18z",
+  more: "M5 12h.01M12 12h.01M19 12h.01",
 };
 function Icon({ d, size = 18, sw = 1.7, fill = "none", style }) {
   const paths = I[d] || d;
@@ -101,15 +102,15 @@ function SearchBar({ value, onChange, mode, setMode, inputRef }) {
             onBlur={() => setFocused(false)}
           />
           {value
-            ? <button className="kbd" style={{ cursor: "pointer" }} onClick={() => onChange("")}>esc</button>
-            : <span className="kbd">⌘K</span>}
+            ? <button className="kbd kbd-esc" style={{ cursor: "pointer" }} onClick={() => onChange("")}>esc</button>
+            : <span className="kbd kbd-hint">⌘K</span>}
         </div>
       </div>
       <div className="modes" role="tablist" title="Search strategy">
         {[["hybrid", "Hybrid"], ["keyword", "Keyword"], ["semantic", "Semantic"]].map(([k, l]) => (
-          <button key={k} className={mode === k ? "on" : ""} onClick={() => setMode(k)}>
-            {k !== "hybrid" && <span className="dot" style={{ background: k === "keyword" ? "var(--clay)" : "var(--sage)" }} />}
-            {l}
+          <button key={k} className={mode === k ? "on" : ""} onClick={() => setMode(k)} title={l}>
+            <span className="dot" style={{ background: k === "keyword" ? "var(--clay)" : k === "semantic" ? "var(--sage)" : "linear-gradient(135deg, var(--clay) 0 50%, var(--sage) 50% 100%)" }} />
+            <span className="modes-label">{l}</span>
           </button>
         ))}
       </div>

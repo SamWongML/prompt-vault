@@ -246,7 +246,7 @@ function App() {
       <header className={`topbar ${railOpen ? "rail-open" : ""}`}>
         <div className="topbar-brand">
           <button className="mark" onClick={() => setRailOpen((v) => !v)} title={railOpen ? "Collapse sidebar" : "Expand sidebar"} aria-label="Toggle sidebar">
-            <Icon d="prompt" size={17} sw={2} style={{ color: "#fff" }} />
+            <Icon d="prompt" size={20} sw={2} style={{ color: "#fff" }} />
           </button>
           <span>
             <div className="name"><b>Prompt</b> Vault</div>

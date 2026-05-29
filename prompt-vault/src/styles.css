@@ -62,7 +62,8 @@
 button, input, [contenteditable] { outline: none; }
 .icon-btn:focus-visible, .btn:focus-visible, .nav-item:focus-visible,
 .tag-chip:focus-visible, .modes button:focus-visible, .fmt-tabs button:focus-visible,
-.act:focus-visible, .sort:focus-visible, .src-opt:focus-visible {
+.act:focus-visible, .sort:focus-visible, .src-opt:focus-visible,
+.topbar-brand .mark:focus-visible {
   outline: 2px solid var(--clay-soft); outline-offset: 2px;
 }
 
@@ -111,21 +112,18 @@ body {
 .topbar-main { display: flex; align-items: center; gap: 14px; padding: 0 20px; min-width: 0; }
 .topbar-main .spacer { flex: 1; }
 
+/* flat, 2D app-mark (doubles as the sidebar toggle): solid clay, a single
+   crisp top-edge highlight, no diagonal gradient or gloss. */
 .topbar-brand .mark {
-  width: 32px; height: 32px; border-radius: 9px; border: 0; padding: 0; cursor: pointer;
-  background: linear-gradient(150deg, var(--clay), var(--clay-soft));
+  width: 36px; height: 36px; border-radius: 10px; border: 0; padding: 0; cursor: pointer;
+  background: var(--clay); color: #fff;
   display: grid; place-items: center; flex-shrink: 0;
-  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,.25);
-  position: relative; overflow: hidden;
-  transition: transform .2s var(--ease-out), filter .2s var(--ease), box-shadow .2s var(--ease);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,.16);
+  transition: transform .18s var(--ease-out), background-color .2s var(--ease), box-shadow .2s var(--ease);
 }
-.topbar-brand .mark:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,.25); }
-.topbar-brand .mark:active { transform: scale(.94); }
-.topbar-brand .mark::after {
-  content: ""; position: absolute; inset: 0;
-  background: radial-gradient(10px 10px at 70% 25%, rgba(255,255,255,.4), transparent 70%);
-}
-.topbar-brand .mark svg { width: 17px; height: 17px; position: relative; z-index: 1; }
+.topbar-brand .mark:hover { transform: translateY(-1px); background: color-mix(in oklab, var(--clay) 93%, #fff); box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,.2); }
+.topbar-brand .mark:active { transform: scale(.95); }
+.topbar-brand .mark svg { width: 20px; height: 20px; }
 .topbar-brand .name { font-family: var(--serif); font-size: 19px; font-weight: 500; letter-spacing: -.01em; white-space: nowrap; }
 .topbar-brand .name b { font-weight: 600; }
 .topbar-brand .sub { font-size: 11px; color: var(--text-3); font-family: var(--mono); margin-top: 1px; letter-spacing: .02em; white-space: nowrap; }

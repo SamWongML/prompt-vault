@@ -1,0 +1,18 @@
+{
+  "name": "prompt-vault",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A calm, developer-oriented prompt vault — hybrid search, CLI-history ingestion, multi-format copy. Single self-contained HTML file, fully local and offline.",
+  "type": "module",
+  "bin": {
+    "prompt-vault": "bin/prompt-vault.mjs"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node bin/prompt-vault.mjs",
+    "dev": "node build.mjs && node bin/prompt-vault.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

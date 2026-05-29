@@ -101,6 +101,10 @@ body {
   backdrop-filter: blur(10px) saturate(1.2);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   position: relative; z-index: 30; min-height: 61px;
+  /* query container for the header's progressive disclosure (see below).
+     Keyed off the whole header so the brand wordmark collapsing can't feed
+     back into which actions are shown. */
+  container-type: inline-size; container-name: header;
 }
 /* collapsed rail → no divider below to align to, so brand hugs its content */
 .topbar:not(.rail-open) { grid-template-columns: max-content minmax(0,1fr); }
@@ -109,8 +113,11 @@ body {
   display: flex; align-items: center; gap: 11px; user-select: none;
   padding: 0 16px 0 20px; min-width: 0;
 }
-.topbar-main { display: flex; align-items: center; gap: 14px; padding: 0 20px; min-width: 0; }
-.topbar-main .spacer { flex: 1; }
+.topbar-main {
+  display: flex; align-items: center; gap: 14px; padding: 0 20px; min-width: 0;
+}
+/* actions group: pushed right without contributing to overflow */
+.topbar-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; position: relative; }
 
 /* flat, 2D app-mark (doubles as the sidebar toggle): solid clay, a single
    crisp top-edge highlight, no diagonal gradient or gloss. */
@@ -129,7 +136,7 @@ body {
 .topbar-brand .sub { font-size: 11px; color: var(--text-3); font-family: var(--mono); margin-top: 1px; letter-spacing: .02em; white-space: nowrap; }
 
 .icon-btn {
-  width: 38px; height: 38px; border-radius: 10px;
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
   border: 1px solid var(--border); background: var(--raised);
   color: var(--text-2); cursor: pointer; display: grid; place-items: center;
   transition: all .2s var(--ease);
@@ -139,7 +146,7 @@ body {
 
 .btn {
   font-family: var(--sans); font-size: 13.5px; font-weight: 600;
-  border-radius: 10px; padding: 9px 15px; cursor: pointer;
+  border-radius: 10px; padding: 9px 15px; cursor: pointer; flex-shrink: 0;
   border: 1px solid transparent; display: inline-flex; align-items: center; gap: 7px;
   transition: all .2s var(--ease); white-space: nowrap;
 }
@@ -150,7 +157,9 @@ body {
 .btn-ghost:hover { border-color: var(--border-strong); transform: translateY(-1px); }
 
 /* ---- Search ---- */
-.search-wrap { flex: 1 1 auto; max-width: 480px; min-width: 200px; position: relative; }
+/* the search is the row's slack absorber — it shrinks (down to nothing) before
+   any control sheds, so the header can never overflow between breakpoints. */
+.search-wrap { flex: 1 1 auto; max-width: 480px; min-width: 0; position: relative; }
 .search {
   display: flex; align-items: center; gap: 10px;
   background: var(--raised); border: 1px solid var(--border);
@@ -160,18 +169,18 @@ body {
 .search.focused { border-color: var(--clay); box-shadow: 0 0 0 4px var(--clay-wash); }
 .search svg.glass { width: 18px; height: 18px; color: var(--text-3); flex-shrink: 0; }
 .search input {
-  flex: 1; border: 0; background: transparent; outline: none;
+  flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
   font-family: var(--sans); font-size: 15px; color: var(--text); height: 100%;
 }
 .search input::placeholder { color: var(--text-3); }
 .kbd {
   font-family: var(--mono); font-size: 11px; color: var(--text-3);
   border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px;
-  padding: 2px 6px; background: var(--surface-2); flex-shrink: 0;
+  padding: 2px 6px; background: var(--surface-2); flex-shrink: 0; margin-right: 2px;
 }
 
 /* search mode segmented control */
-.modes { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+.modes { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; flex-shrink: 0; }
 .modes button {
   font-family: var(--sans); font-size: 12.5px; font-weight: 600; color: var(--text-2);
   border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; cursor: pointer;
@@ -179,6 +188,78 @@ body {
 }
 .modes button.on { color: var(--text); background: var(--raised); box-shadow: var(--shadow-sm); }
 .modes button .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+/* ---- Topbar overflow (⋯) menu — shown only at the narrowest band ---- */
+.topbar-overflow { display: none; }
+.topbar-overflow-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); min-width: 200px;
+  background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-md); z-index: 50; padding: 8px;
+  display: flex; flex-direction: column; gap: 2px; animation: fade .15s var(--ease);
+}
+.topbar-overflow-menu button {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  font-family: var(--sans); font-size: 13.5px; font-weight: 600; color: var(--text);
+  border: 0; background: transparent; padding: 9px 10px; border-radius: var(--radius-sm); cursor: pointer;
+  transition: background .15s var(--ease);
+}
+.topbar-overflow-menu button:hover { background: var(--surface-2); }
+.topbar-overflow-menu svg { color: var(--text-2); }
+
+/* ============================================================
+   Header progressive disclosure.
+
+   Driven by the *whole header's* width (the .topbar container),
+   not the search/actions sub-row. This is deliberate: the brand
+   wordmark collapses to its icon at the ≤720 phone breakpoint,
+   which widens the sub-row — so a sub-row container query would
+   make controls that had already collapsed pop back open as the
+   window keeps shrinking. The full header width is unaffected by
+   the wordmark collapsing, so keying off it keeps the shedding
+   strictly monotonic: as the window narrows, each control sheds
+   once, in priority order, and never returns.
+
+   Shed order (lowest priority first): ⌘K hint → mode labels &
+   Ingest label → Ingest itself (into ⋯) → New label. The search
+   field, New's icon and the theme toggle always survive.
+   ============================================================ */
+
+/* 1 — drop the decorative ⌘K hint */
+@container header (max-width: 1000px) {
+  .kbd-hint { display: none; }
+}
+/* 2 — search modes collapse to colored dots (tooltips carry the names);
+   Ingest sheds its label down to an icon */
+@container header (max-width: 960px) {
+  .modes-label { display: none; }
+  .modes button { padding: 6px 8px; }
+  .modes button .dot { margin-right: 0; }
+  .topbar-actions .btn-ghost .btn-label { display: none; }
+  .topbar-actions .btn-ghost { padding: 9px 11px; }
+}
+/* 3 — Ingest folds into the ⋯ overflow menu, leaving New the only
+   labelled action on the row */
+@container header (max-width: 600px) {
+  .topbar-actions .btn-ghost { display: none; }
+  .topbar-overflow { display: grid; }
+}
+/* 4 — New → icon-only */
+@container header (max-width: 520px) {
+  .topbar-actions .btn-primary .btn-label { display: none; }
+  .topbar-actions .btn-primary { padding: 9px 11px; }
+}
+/* 5 — phone widths: the mode dots are the last non-essential control to go, so
+   the search field stays usable. Search defaults to Hybrid (the active mode is
+   still shown in the results header), and the field keeps real width down here
+   instead of collapsing to its icon. */
+@container header (max-width: 440px) {
+  .modes { display: none; }
+}
+
+/* keyboard hints are meaningless on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .kbd-hint { display: none; }
+}
 
 /* ---- Body grid ---- */
 .body {
@@ -494,11 +575,13 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 
 /* Phone (≤ 720): single list column; rail becomes a left drawer, detail full-width. */
 @media (max-width: 720px) {
-  .topbar { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 14px; min-height: 0; grid-template-columns: none; align-items: center; }
-  .topbar-brand, .topbar.rail-open .topbar-brand { border-right: 0; padding: 0; }
-  .topbar-main { display: contents; }
-  .search-wrap { order: 3; flex-basis: 100%; max-width: none; }
-  .modes { order: 4; }
+  /* header stays a single grid row; the rail is an overlay here, so the brand
+     column never reserves the open-rail width. Wordmark hides for breathing room
+     — the container-query bands above keep the action row tidy. */
+  .topbar, .topbar.rail-open { grid-template-columns: max-content minmax(0,1fr); }
+  .topbar-brand, .topbar.rail-open .topbar-brand { border-right: 0; padding: 0 0 0 14px; }
+  .topbar-main { padding: 0 14px; }
+  .topbar-brand .name, .topbar-brand .sub { display: none; }
 
   .body, .body.no-detail, .body.rail-collapsed { grid-template-columns: minmax(0,1fr) !important; }
 

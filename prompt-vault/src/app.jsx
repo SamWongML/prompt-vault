@@ -30,8 +30,10 @@ function App() {
   const [railOpen, setRailOpen] = uS(() => (typeof window !== "undefined" ? window.innerWidth > 1080 : true));
   const [detailMobileOpen, setDetailMobileOpen] = uS(false); // detail overlay visibility on narrow screens
   const [staggerOn, setStaggerOn] = uS(true); // card entrance plays on first load only
+  const [overflowOpen, setOverflowOpen] = uS(false); // topbar ⋯ menu (narrow widths only)
 
   const searchRef = uR(null);
+  const overflowRef = uR(null);
   const engine = uM(() => new window.PVSearch(), []);
   engine.build(prompts);
 
@@ -51,6 +53,16 @@ function App() {
 
   /* let the first-load card stagger play once, then stop animating on filter/search */
   uE(() => { const t = setTimeout(() => setStaggerOn(false), 800); return () => clearTimeout(t); }, []);
+
+  /* close the topbar overflow menu on Escape or an outside click */
+  uE(() => {
+    if (!overflowOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setOverflowOpen(false); };
+    const onDown = (e) => { if (overflowRef.current && !overflowRef.current.contains(e.target)) setOverflowOpen(false); };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
+  }, [overflowOpen]);
 
   /* toast helper */
   const toast = uC((msg, icon) => {
@@ -256,12 +268,21 @@ function App() {
 
         <div className="topbar-main">
           <SearchBar value={query} onChange={setQuery} mode={mode} setMode={setMode} inputRef={searchRef} />
-          <span className="spacer" />
-          <button className="btn btn-ghost" onClick={() => setShowImport(true)}><Icon d="import" size={16} /> Ingest</button>
-          <button className="btn btn-primary" onClick={newPrompt}><Icon d="plus" size={16} /> New</button>
-          <button className="icon-btn" title="Toggle theme" onClick={() => setTheme((t) => (t === "light" ? "dark" : "light"))}>
-            <Icon d={theme === "light" ? "moon" : "sun"} size={18} />
-          </button>
+          <div className="topbar-actions" ref={overflowRef}>
+            <button className="btn btn-ghost" title="Ingest prompts" onClick={() => setShowImport(true)}><Icon d="import" size={16} /> <span className="btn-label">Ingest</span></button>
+            <button className="btn btn-primary" title="New prompt" onClick={newPrompt}><Icon d="plus" size={16} /> <span className="btn-label">New</span></button>
+            <button className="icon-btn" title="Toggle theme" onClick={() => setTheme((t) => (t === "light" ? "dark" : "light"))}>
+              <Icon d={theme === "light" ? "moon" : "sun"} size={18} />
+            </button>
+            <button className="icon-btn topbar-overflow" aria-label="More actions" aria-haspopup="true" aria-expanded={overflowOpen} onClick={() => setOverflowOpen((v) => !v)}>
+              <Icon d="more" size={18} />
+            </button>
+            {overflowOpen && (
+              <div className="topbar-overflow-menu" role="menu">
+                <button role="menuitem" onClick={() => { setShowImport(true); setOverflowOpen(false); }}><Icon d="import" size={16} /> Ingest</button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

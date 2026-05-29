@@ -187,7 +187,7 @@ function Card({ result, prompt, selected, onClick, searching, terms, idx, animat
         </div>
       )}
       <div className="card-top">
-        {prompt.pinned && <span className="pin-dot" title="Pinned"><Icon d="pin" size={14} fill="currentColor" sw={0} /></span>}
+        {prompt.pinned && <span className="pin-dot" title="Pinned"><Icon d="pin" size={14} fill="currentColor" sw={1.7} /></span>}
         <h3 className="card-title" style={{ paddingRight: searching ? 120 : 0 }}>
           {searching && terms ? highlight(prompt.title, terms) : prompt.title}
         </h3>
@@ -262,8 +262,8 @@ function Detail({ prompt, onUpdate, onAction, toast }) {
           suppressContentEditableWarning
         >{prompt.title}</h1>
         <div className="detail-actions">
-          <button className={`act ${prompt.pinned ? "on" : ""}`} title={prompt.pinned ? "Unpin" : "Pin"}
-            onClick={() => onAction("pin", prompt)}><Icon d="pin" size={16} fill={prompt.pinned ? "currentColor" : "none"} sw={prompt.pinned ? 0 : 1.7} /></button>
+          <button className={`act ${prompt.pinned ? "on" : ""}`} title={prompt.pinned ? "Unpin" : "Pin"} aria-pressed={prompt.pinned}
+            onClick={() => onAction("pin", prompt)}><Icon d="pin" size={16} fill={prompt.pinned ? "currentColor" : "none"} sw={1.7} /></button>
           <button className={`act ${editing ? "on" : ""}`} title={editing ? "Save" : "Edit"}
             onClick={() => editing ? commitEdit() : setEditing(true)}><Icon d={editing ? "check" : "edit"} size={16} /></button>
           <button className="act" title="Duplicate" onClick={() => onAction("duplicate", prompt)}><Icon d="dup" size={15} /></button>

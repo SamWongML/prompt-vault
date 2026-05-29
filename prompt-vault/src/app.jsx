@@ -69,17 +69,21 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [query]);
 
-  /* counts for sidebar (respect search-independent buckets) */
+  /* counts for sidebar (respect search-independent buckets)
+     Library counts stay global; Status counts reflect the selected library so
+     the numbers can never promise more than the list will show (e.g. Pinned
+     reads 0 under OpenCode when every pinned prompt is Manual). */
   const counts = uM(() => {
     const bySource = { all: 0, codex: 0, opencode: 0, manual: 0 };
     const byStatus = { active: 0, pinned: 0, archived: 0 };
     prompts.forEach((p) => {
       if (!p.archived) { bySource.all++; bySource[p.source] = (bySource[p.source] || 0) + 1; }
+      if (source !== "all" && p.source !== source) return; // status counts are scoped to the active library
       if (p.archived) byStatus.archived++;
       else { byStatus.active++; if (p.pinned) byStatus.pinned++; }
     });
     return { bySource, byStatus };
-  }, [prompts]);
+  }, [prompts, source]);
 
   const allTags = uM(() => {
     const m = {};

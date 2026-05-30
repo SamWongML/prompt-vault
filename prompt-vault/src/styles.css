@@ -93,14 +93,17 @@ body {
   min-height: 0;
 }
 
-/* ---- Top bar (3-zone grid: brand | centered search | actions) ---- */
-/* The search sits in the centre column and stays dead-centred regardless of
-   sidebar state — the edge columns are equal (1fr each), so collapsing the
-   rail can never shift it. The header is deliberately decoupled from the
-   body's column grid; alignment to the sidebar is no longer attempted. */
+/* ---- Top bar (flex row: brand | centre search | actions) ---- */
+/* "Centre with slack": the side zones hold their natural width and never
+   shrink; the centre search is centred by its auto margins when there's free
+   space, and simply yields width when space runs out. Because these are flex
+   siblings they can never overlap — under pressure the centre shrinks instead.
+   (The previous `1fr auto 1fr` grid forced the two edge columns equal, so the
+   wider, non-shrinking side would overflow *into* the centred search.) The
+   header is deliberately decoupled from the body's column grid; the search
+   stays put regardless of sidebar state. */
 .topbar {
-  display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center;
-  column-gap: 16px; padding: 0 20px;
+  display: flex; align-items: center; gap: 16px; padding: 0 20px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in oklab, var(--surface) 82%, transparent);
   backdrop-filter: blur(10px) saturate(1.2);
@@ -112,17 +115,23 @@ body {
   container-type: inline-size; container-name: header;
 }
 
+/* brand: pinned to the left, natural width, never shrinks. The logo is the
+   first flex item at the padding edge, so hiding the wordmark only removes
+   content to its right — the logo's x position never moves. */
 .topbar-brand {
   display: flex; align-items: center; gap: 11px; user-select: none;
-  justify-self: start; min-width: 0;
+  flex: 0 0 auto; min-width: 0;
 }
-/* centre zone: holds the search field + mode toggles, centred as a unit */
+/* centre zone: holds the search field + mode toggles. `margin-inline: auto`
+   splits the free space equally on both sides → centred between brand and
+   actions; when free space hits zero the margins collapse and the zone shrinks
+   (its .search-wrap carries min-width:0). */
 .topbar-search {
   display: flex; align-items: center; gap: 14px;
-  justify-self: center; min-width: 0;
+  flex: 0 1 auto; min-width: 0; margin-inline: auto;
 }
-/* actions group: pinned to the right edge */
-.topbar-actions { display: flex; align-items: center; gap: 10px; justify-self: end; flex-shrink: 0; position: relative; }
+/* actions group: pinned to the right edge, natural width, never shrinks */
+.topbar-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; position: relative; }
 
 /* flat, 2D app-mark (doubles as the sidebar toggle): solid clay, a single
    crisp top-edge highlight, no diagonal gradient or gloss. */
@@ -162,9 +171,10 @@ body {
 .btn-ghost:hover { border-color: var(--border-strong); transform: translateY(-1px); }
 
 /* ---- Search ---- */
-/* the search has a stable, centred width (it no longer "fills slack"): it holds
-   a comfortable target width that fluidly tracks the viewport, then shrinks
-   before any control sheds, so the header can never overflow between breakpoints. */
+/* the search holds a comfortable target width that fluidly tracks the viewport
+   (clamped 280–480px), and is the shrinkable element of the centre zone: when
+   the header runs out of room it gives up width (min-width:0 + flex-shrink)
+   before the layout can ever overflow. */
 .search-wrap { flex: 0 1 auto; width: clamp(280px, 34vw, 480px); max-width: 480px; min-width: 0; position: relative; }
 .search {
   display: flex; align-items: center; gap: 10px;
@@ -220,19 +230,28 @@ body {
 /* ============================================================
    Header progressive disclosure.
 
+   With the flex "centre with slack" layout the header can no
+   longer overlap or overflow at any width — the centre search
+   simply shrinks. So this shedding is now about *comfort*: as the
+   window narrows we trim low-value chrome (labels, hints) so the
+   search keeps a usable width instead of being squeezed to a
+   sliver.
+
    Driven by the *whole header's* width (the .topbar container),
    not the search/actions sub-row. This is deliberate: the brand
-   wordmark collapses to its icon at the ≤720 phone breakpoint,
-   which widens the sub-row — so a sub-row container query would
-   make controls that had already collapsed pop back open as the
-   window keeps shrinking. The full header width is unaffected by
-   the wordmark collapsing, so keying off it keeps the shedding
-   strictly monotonic: as the window narrows, each control sheds
-   once, in priority order, and never returns.
+   wordmark hides as the window narrows, which would *widen* a
+   sub-row — so a sub-row container query would make already-shed
+   controls pop back open as the window keeps shrinking. The full
+   header width only ever decreases as the window narrows (the
+   container's inline size is viewport-driven, and `inline-size`
+   containment keeps hiding a child from feeding back into it), so
+   keying off it keeps the shedding strictly monotonic: each
+   control sheds once, in priority order, and never returns.
 
    Shed order (lowest priority first): ⌘K hint → mode labels &
-   Ingest label → Ingest itself (into ⋯) → New label. The search
-   field, New's icon and the theme toggle always survive.
+   Ingest label → brand wordmark → Ingest itself (into ⋯) → New
+   label → mode dots. The search field, New's icon and the theme
+   toggle always survive.
    ============================================================ */
 
 /* 1 — drop the decorative ⌘K hint */
@@ -248,18 +267,24 @@ body {
   .topbar-actions .btn-ghost .btn-label { display: none; }
   .topbar-actions .btn-ghost { padding: 9px 11px; }
 }
-/* 3 — Ingest folds into the ⋯ overflow menu, leaving New the only
+/* 3 — brand wordmark hides, leaving just the app mark. The mark is the first
+   flex item at the constant left padding edge, so this frees ~130px for the
+   search without shifting the logo a single pixel. */
+@container header (max-width: 760px) {
+  .topbar-brand .name, .topbar-brand .sub { display: none; }
+}
+/* 4 — Ingest folds into the ⋯ overflow menu, leaving New the only
    labelled action on the row */
 @container header (max-width: 600px) {
   .topbar-actions .btn-ghost { display: none; }
   .topbar-overflow { display: grid; }
 }
-/* 4 — New → icon-only */
+/* 5 — New → icon-only */
 @container header (max-width: 520px) {
   .topbar-actions .btn-primary .btn-label { display: none; }
   .topbar-actions .btn-primary { padding: 9px 11px; }
 }
-/* 5 — phone widths: the mode dots are the last non-essential control to go, so
+/* 6 — phone widths: the mode dots are the last non-essential control to go, so
    the search field stays usable. Search defaults to Hybrid (the active mode is
    still shown in the results header), and the field keeps real width down here
    instead of collapsing to its icon. */
@@ -584,18 +609,11 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
   .icon-btn.detail-close { display: grid; position: absolute; top: 14px; right: 16px; z-index: 6; background: var(--surface-2); }
 }
 
-/* Phone (≤ 720): single list column; rail becomes a left drawer, detail full-width. */
+/* Phone (≤ 720): single list column; rail becomes a left drawer, detail full-width.
+   The header needs no special-casing here — its flex "centre with slack" layout
+   and the container-query shed bands above already handle phone widths (constant
+   padding keeps the logo anchored; the search fills whatever room is left). */
 @media (max-width: 720px) {
-  /* header collapses to brand | flexible search | actions on one row. The
-     centred 3-zone layout needs room for a min-width search plus both edges,
-     which phones lack — so here the search simply fills the middle track
-     instead of staying centred. Wordmark hides for breathing room; the
-     container-query bands above keep the action row tidy. */
-  .topbar { grid-template-columns: max-content minmax(0,1fr) max-content; column-gap: 10px; padding: 0 14px; }
-  .topbar-search { justify-self: stretch; }
-  .search-wrap { flex: 1 1 auto; width: auto; max-width: none; }
-  .topbar-brand .name, .topbar-brand .sub { display: none; }
-
   .body, .body.no-detail, .body.rail-collapsed { grid-template-columns: minmax(0,1fr) !important; }
 
   .rail {

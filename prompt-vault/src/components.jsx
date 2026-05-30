@@ -88,23 +88,42 @@ function asFormat(prompt, fmt, values) {
 /* ---------- SearchBar + modes ---------- */
 const SEARCH_MODES = [["hybrid", "Hybrid"], ["keyword", "Keyword"], ["semantic", "Semantic"]];
 
+const SEARCH_PH_LONG = "Search prompts by keyword or meaning…";
+const SEARCH_PH_SHORT = "Search prompts…";
+
 function SearchBar({ value, onChange, mode, setMode, inputRef }) {
   const [focused, setFocused] = useState(false);
-  // placeholder swaps to a short form once the field gets too narrow for the
-  // long text (it bottoms out at its min width ~1080px viewport). CSS can't
-  // change placeholder text; the input keeps a full, stable aria-label regardless.
-  const [compact, setCompact] = useState(() =>
-    typeof window !== "undefined" && window.matchMedia("(max-width: 1080px)").matches);
+  // The placeholder swaps to the short form only when the *field itself* is too
+  // narrow to show the long text — measured directly (ResizeObserver on the
+  // input, compared against the long string's actual rendered width) rather than
+  // guessed from a viewport breakpoint. So it stays correct however the flex
+  // header distributes space, and reclaims the long text the moment the ⌘K badge
+  // sheds and frees room. CSS can't vary placeholder text; the input keeps a
+  // full, stable aria-label regardless.
+  const [compact, setCompact] = useState(false);
   const modesRef = useRef(null);
 
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1080px)");
-    const on = (e) => setCompact(e.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
+    const el = inputRef && inputRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    // px the long placeholder needs in the input's own font (+ caret breathing room)
+    const needWidth = () => {
+      const cs = getComputedStyle(el);
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      return ctx.measureText(SEARCH_PH_LONG).width + 16;
+    };
+    let need = needWidth();
+    const evaluate = () => setCompact(el.getBoundingClientRect().width < need);
+    const ro = new ResizeObserver(evaluate);
+    ro.observe(el);
+    // web fonts load async; their metrics can shift the threshold — re-measure once ready
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { need = needWidth(); evaluate(); });
+    return () => ro.disconnect();
+  }, [inputRef]);
 
-  const placeholder = compact ? "Search prompts…" : "Search prompts by keyword or meaning…";
+  const placeholder = compact ? SEARCH_PH_SHORT : SEARCH_PH_LONG;
 
   // radiogroup keyboard pattern: arrows move + select + focus, with wraparound
   const onModeKey = (e) => {

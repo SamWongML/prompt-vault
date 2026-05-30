@@ -93,9 +93,14 @@ body {
   min-height: 0;
 }
 
-/* ---- Top bar (aligned to the body's column grid) ---- */
+/* ---- Top bar (3-zone grid: brand | centered search | actions) ---- */
+/* The search sits in the centre column and stays dead-centred regardless of
+   sidebar state — the edge columns are equal (1fr each), so collapsing the
+   rail can never shift it. The header is deliberately decoupled from the
+   body's column grid; alignment to the sidebar is no longer attempted. */
 .topbar {
-  display: grid; grid-template-columns: 232px minmax(0,1fr); align-items: stretch;
+  display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center;
+  column-gap: 16px; padding: 0 20px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in oklab, var(--surface) 82%, transparent);
   backdrop-filter: blur(10px) saturate(1.2);
@@ -106,18 +111,18 @@ body {
      back into which actions are shown. */
   container-type: inline-size; container-name: header;
 }
-/* collapsed rail → no divider below to align to, so brand hugs its content */
-.topbar:not(.rail-open) { grid-template-columns: max-content minmax(0,1fr); }
 
 .topbar-brand {
   display: flex; align-items: center; gap: 11px; user-select: none;
-  padding: 0 16px 0 20px; min-width: 0;
+  justify-self: start; min-width: 0;
 }
-.topbar-main {
-  display: flex; align-items: center; gap: 14px; padding: 0 20px; min-width: 0;
+/* centre zone: holds the search field + mode toggles, centred as a unit */
+.topbar-search {
+  display: flex; align-items: center; gap: 14px;
+  justify-self: center; min-width: 0;
 }
-/* actions group: pushed right without contributing to overflow */
-.topbar-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; position: relative; }
+/* actions group: pinned to the right edge */
+.topbar-actions { display: flex; align-items: center; gap: 10px; justify-self: end; flex-shrink: 0; position: relative; }
 
 /* flat, 2D app-mark (doubles as the sidebar toggle): solid clay, a single
    crisp top-edge highlight, no diagonal gradient or gloss. */
@@ -157,9 +162,10 @@ body {
 .btn-ghost:hover { border-color: var(--border-strong); transform: translateY(-1px); }
 
 /* ---- Search ---- */
-/* the search is the row's slack absorber — it shrinks (down to nothing) before
-   any control sheds, so the header can never overflow between breakpoints. */
-.search-wrap { flex: 1 1 auto; max-width: 480px; min-width: 0; position: relative; }
+/* the search has a stable, centred width (it no longer "fills slack"): it holds
+   a comfortable target width that fluidly tracks the viewport, then shrinks
+   before any control sheds, so the header can never overflow between breakpoints. */
+.search-wrap { flex: 0 1 auto; width: clamp(280px, 34vw, 480px); max-width: 480px; min-width: 0; position: relative; }
 .search {
   display: flex; align-items: center; gap: 10px;
   background: var(--raised); border: 1px solid var(--border);
@@ -188,6 +194,11 @@ body {
 }
 .modes button.on { color: var(--text); background: var(--raised); box-shadow: var(--shadow-sm); }
 .modes button .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+/* keyboard focus rings for the search's interactive bits (the field itself
+   already rings via .search.focused) */
+.modes button:focus-visible,
+.kbd-esc:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
 
 /* ---- Topbar overflow (⋯) menu — shown only at the narrowest band ---- */
 .topbar-overflow { display: none; }
@@ -575,12 +586,14 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 
 /* Phone (≤ 720): single list column; rail becomes a left drawer, detail full-width. */
 @media (max-width: 720px) {
-  /* header stays a single grid row; the rail is an overlay here, so the brand
-     column never reserves the open-rail width. Wordmark hides for breathing room
-     — the container-query bands above keep the action row tidy. */
-  .topbar, .topbar.rail-open { grid-template-columns: max-content minmax(0,1fr); }
-  .topbar-brand, .topbar.rail-open .topbar-brand { border-right: 0; padding: 0 0 0 14px; }
-  .topbar-main { padding: 0 14px; }
+  /* header collapses to brand | flexible search | actions on one row. The
+     centred 3-zone layout needs room for a min-width search plus both edges,
+     which phones lack — so here the search simply fills the middle track
+     instead of staying centred. Wordmark hides for breathing room; the
+     container-query bands above keep the action row tidy. */
+  .topbar { grid-template-columns: max-content minmax(0,1fr) max-content; column-gap: 10px; padding: 0 14px; }
+  .topbar-search { justify-self: stretch; }
+  .search-wrap { flex: 1 1 auto; width: auto; max-width: none; }
   .topbar-brand .name, .topbar-brand .sub { display: none; }
 
   .body, .body.no-detail, .body.rail-collapsed { grid-template-columns: minmax(0,1fr) !important; }

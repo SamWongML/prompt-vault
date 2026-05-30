@@ -255,7 +255,7 @@ function App() {
   return (
     <div className="app">
       {/* top bar */}
-      <header className={`topbar ${railOpen ? "rail-open" : ""}`}>
+      <header className="topbar">
         <div className="topbar-brand">
           <button className="mark" onClick={() => setRailOpen((v) => !v)} title={railOpen ? "Collapse sidebar" : "Expand sidebar"} aria-label="Toggle sidebar">
             <Icon d="prompt" size={20} sw={2} style={{ color: "#fff" }} />
@@ -266,23 +266,24 @@ function App() {
           </span>
         </div>
 
-        <div className="topbar-main">
+        <div className="topbar-search">
           <SearchBar value={query} onChange={setQuery} mode={mode} setMode={setMode} inputRef={searchRef} />
-          <div className="topbar-actions" ref={overflowRef}>
-            <button className="btn btn-ghost" title="Ingest prompts" onClick={() => setShowImport(true)}><Icon d="import" size={16} /> <span className="btn-label">Ingest</span></button>
-            <button className="btn btn-primary" title="New prompt" onClick={newPrompt}><Icon d="plus" size={16} /> <span className="btn-label">New</span></button>
-            <button className="icon-btn" title="Toggle theme" onClick={() => setTheme((t) => (t === "light" ? "dark" : "light"))}>
-              <Icon d={theme === "light" ? "moon" : "sun"} size={18} />
-            </button>
-            <button className="icon-btn topbar-overflow" aria-label="More actions" aria-haspopup="true" aria-expanded={overflowOpen} onClick={() => setOverflowOpen((v) => !v)}>
-              <Icon d="more" size={18} />
-            </button>
-            {overflowOpen && (
-              <div className="topbar-overflow-menu" role="menu">
-                <button role="menuitem" onClick={() => { setShowImport(true); setOverflowOpen(false); }}><Icon d="import" size={16} /> Ingest</button>
-              </div>
-            )}
-          </div>
+        </div>
+
+        <div className="topbar-actions" ref={overflowRef}>
+          <button className="btn btn-ghost" title="Ingest prompts" onClick={() => setShowImport(true)}><Icon d="import" size={16} /> <span className="btn-label">Ingest</span></button>
+          <button className="btn btn-primary" title="New prompt" onClick={newPrompt}><Icon d="plus" size={16} /> <span className="btn-label">New</span></button>
+          <button className="icon-btn" title="Toggle theme" onClick={() => setTheme((t) => (t === "light" ? "dark" : "light"))}>
+            <Icon d={theme === "light" ? "moon" : "sun"} size={18} />
+          </button>
+          <button className="icon-btn topbar-overflow" aria-label="More actions" aria-haspopup="true" aria-expanded={overflowOpen} onClick={() => setOverflowOpen((v) => !v)}>
+            <Icon d="more" size={18} />
+          </button>
+          {overflowOpen && (
+            <div className="topbar-overflow-menu" role="menu">
+              <button role="menuitem" onClick={() => { setShowImport(true); setOverflowOpen(false); }}><Icon d="import" size={16} /> Ingest</button>
+            </div>
+          )}
         </div>
       </header>
 

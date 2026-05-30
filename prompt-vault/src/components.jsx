@@ -86,29 +86,63 @@ function asFormat(prompt, fmt, values) {
 }
 
 /* ---------- SearchBar + modes ---------- */
+const SEARCH_MODES = [["hybrid", "Hybrid"], ["keyword", "Keyword"], ["semantic", "Semantic"]];
+
 function SearchBar({ value, onChange, mode, setMode, inputRef }) {
   const [focused, setFocused] = useState(false);
+  // placeholder swaps to a short form once the field gets too narrow for the
+  // long text (it bottoms out at its min width ~1080px viewport). CSS can't
+  // change placeholder text; the input keeps a full, stable aria-label regardless.
+  const [compact, setCompact] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 1080px)").matches);
+  const modesRef = useRef(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1080px)");
+    const on = (e) => setCompact(e.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+
+  const placeholder = compact ? "Search prompts…" : "Search prompts by keyword or meaning…";
+
+  // radiogroup keyboard pattern: arrows move + select + focus, with wraparound
+  const onModeKey = (e) => {
+    const keys = SEARCH_MODES.map(([k]) => k);
+    const i = keys.indexOf(mode);
+    let next;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (i + 1) % keys.length;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (i - 1 + keys.length) % keys.length;
+    else return;
+    e.preventDefault();
+    setMode(keys[next]);
+    const btns = modesRef.current && modesRef.current.querySelectorAll("button");
+    if (btns && btns[next]) btns[next].focus();
+  };
+
   return (
     <>
-      <div className="search-wrap">
+      <div className="search-wrap" role="search">
         <div className={`search ${focused ? "focused" : ""}`}>
           <Icon d="search" style={{}} />
           <input
             ref={inputRef}
             value={value}
-            placeholder="Search prompts by keyword or meaning…"
+            placeholder={placeholder}
+            aria-label="Search prompts by keyword or meaning"
+            aria-keyshortcuts="Meta+K Control+K"
             onChange={(e) => onChange(e.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
           />
           {value
-            ? <button className="kbd kbd-esc" style={{ cursor: "pointer" }} onClick={() => onChange("")}>esc</button>
-            : <span className="kbd kbd-hint">⌘K</span>}
+            ? <button className="kbd kbd-esc" aria-label="Clear search" style={{ cursor: "pointer" }} onClick={() => onChange("")}>esc</button>
+            : <span className="kbd kbd-hint" aria-hidden="true">⌘K</span>}
         </div>
       </div>
-      <div className="modes" role="tablist" title="Search strategy">
-        {[["hybrid", "Hybrid"], ["keyword", "Keyword"], ["semantic", "Semantic"]].map(([k, l]) => (
-          <button key={k} className={mode === k ? "on" : ""} onClick={() => setMode(k)} title={l}>
+      <div className="modes" role="radiogroup" aria-label="Search mode" title="Search strategy" ref={modesRef} onKeyDown={onModeKey}>
+        {SEARCH_MODES.map(([k, l]) => (
+          <button key={k} role="radio" aria-checked={mode === k} tabIndex={mode === k ? 0 : -1} className={mode === k ? "on" : ""} onClick={() => setMode(k)} title={l}>
             <span className="dot" style={{ background: k === "keyword" ? "var(--clay)" : k === "semantic" ? "var(--sage)" : "linear-gradient(135deg, var(--clay) 0 50%, var(--sage) 50% 100%)" }} />
             <span className="modes-label">{l}</span>
           </button>

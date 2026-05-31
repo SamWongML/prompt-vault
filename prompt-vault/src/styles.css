@@ -210,13 +210,17 @@ body {
 .modes button:focus-visible,
 .kbd-esc:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
 
-/* ---- Topbar overflow (⋯) menu — shown only at the narrowest band ---- */
+/* ---- Topbar overflow (⋯) menu — shown only at the narrowest band ----
+   Both the ⋯ trigger and its popout default to hidden and are revealed together
+   by the max-width:600 container query below. Gating the popout in CSS (not just
+   on React's overflowOpen state) means widening the window can never leave the
+   menu floating after its trigger has been shed. */
 .topbar-overflow { display: none; }
 .topbar-overflow-menu {
   position: absolute; right: 0; top: calc(100% + 8px); min-width: 200px;
   background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow-md); z-index: 50; padding: 8px;
-  display: flex; flex-direction: column; gap: 2px; animation: fade .15s var(--ease);
+  display: none; flex-direction: column; gap: 2px; animation: fade .15s var(--ease);
 }
 .topbar-overflow-menu button {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
@@ -241,12 +245,14 @@ body {
    not the search/actions sub-row. This is deliberate: the brand
    wordmark hides as the window narrows, which would *widen* a
    sub-row — so a sub-row container query would make already-shed
-   controls pop back open as the window keeps shrinking. The full
-   header width only ever decreases as the window narrows (the
-   container's inline size is viewport-driven, and `inline-size`
-   containment keeps hiding a child from feeding back into it), so
-   keying off it keeps the shedding strictly monotonic: each
-   control sheds once, in priority order, and never returns.
+   controls flip back open mid-resize. The full header width is
+   viewport-driven, so it moves monotonically with the window and
+   each control sheds at one stable threshold (no flip-flopping).
+   The shedding is still fully *reversible*, though: widen past a
+   threshold and that control comes straight back. Anything carried
+   in JS that mirrors a shed control — e.g. the ⋯ menu's open state —
+   must reverse with it too, or it strands on screen after the
+   control returns (see the resize-dismiss in app.jsx).
 
    Shed order (lowest priority first): ⌘K hint → mode labels &
    Ingest label → brand wordmark → Ingest itself (into ⋯) → New
@@ -273,11 +279,14 @@ body {
 @container header (max-width: 760px) {
   .topbar-brand .name, .topbar-brand .sub { display: none; }
 }
-/* 4 — Ingest folds into the ⋯ overflow menu, leaving New the only
-   labelled action on the row */
+/* 4 — Ingest folds into the ⋯ overflow menu, leaving New the only labelled
+   action on the row. The trigger and its popout are both gated on this band, so
+   widening past it removes them together and the inline Ingest button becomes
+   the single Ingest affordance again. */
 @container header (max-width: 600px) {
   .topbar-actions .btn-ghost { display: none; }
   .topbar-overflow { display: grid; }
+  .topbar-overflow-menu { display: flex; }
 }
 /* 5 — New → icon-only */
 @container header (max-width: 520px) {

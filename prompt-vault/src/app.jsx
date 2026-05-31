@@ -54,14 +54,20 @@ function App() {
   /* let the first-load card stagger play once, then stop animating on filter/search */
   uE(() => { const t = setTimeout(() => setStaggerOn(false), 800); return () => clearTimeout(t); }, []);
 
-  /* close the topbar overflow menu on Escape or an outside click */
+  /* dismiss the topbar overflow menu on Escape, an outside click, or a resize.
+     The ⋯ trigger only exists at narrow widths (a container query hides it as
+     the header grows). Closing on resize keeps the menu's open state tied to its
+     trigger, so a menu opened while narrow can't linger — floating and orphaned —
+     once the window widens and the inline Ingest button comes back. */
   uE(() => {
     if (!overflowOpen) return;
-    const onKey = (e) => { if (e.key === "Escape") setOverflowOpen(false); };
-    const onDown = (e) => { if (overflowRef.current && !overflowRef.current.contains(e.target)) setOverflowOpen(false); };
+    const close = () => setOverflowOpen(false);
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    const onDown = (e) => { if (overflowRef.current && !overflowRef.current.contains(e.target)) close(); };
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onDown);
-    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
+    window.addEventListener("resize", close);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); window.removeEventListener("resize", close); };
   }, [overflowOpen]);
 
   /* toast helper */

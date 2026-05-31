@@ -588,7 +588,70 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 /* graceful close: lightest possible — opacity only, brief. No slide, no blur,
    no scale. The panel simply fades while the list expands underneath. */
 @keyframes detail-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes detail-in  { from { transform: translateX(100%); } to { transform: none; } }
+
+/* ============================================================
+   Desktop (≥1081) sidebar motion — transform, not layout.
+
+   The body's `grid-template-columns` tween (above) is a *layout*
+   animation: every frame re-runs layout for the whole row, so the
+   centre column's content rewraps live as the track grows — text
+   reflowing line-by-line, the detail's buttons snapping onto one
+   row. Cheap, and not compositor-friendly.
+
+   Here the panels leave the grid entirely. Each is an out-of-flow,
+   fixed-width column that slides with `transform` (composited, no
+   reflow) — so a panel's own content is laid out once at full
+   width and can never rewrap mid-slide. The list is the only
+   in-flow region; it reserves the panels' width with a `margin`
+   transition, which only repositions the (capped) card column —
+   it never rewraps it. This mirrors the transform-slide the
+   ≤1080 drawers already use; it just keeps the 3-column push.
+
+   `overflow: hidden` on the body clips a panel as it slides past
+   the edge, so it leaves cleanly instead of flashing a scrollbar.
+   ============================================================ */
 @media (min-width: 1081px) {
+  .body { display: block; overflow: hidden; }
+  /* the grid-template-columns tween is inert under display:block, but drop
+     it so a resize across the 1080 boundary can't briefly animate the row */
+  .body, .body.rail-collapsed, .body.no-detail, .body.rail-collapsed.no-detail { transition: none; }
+
+  /* list: in-flow, full height; margins reserve the two panels' widths and
+     are the only thing that animates the push (cheap — capped cards just shift) */
+  .list-col {
+    height: 100%;
+    margin-left: 232px; margin-right: clamp(340px, 30vw, 440px);
+    transition: margin .35s var(--ease);
+  }
+  .body.rail-collapsed .list-col { margin-left: 0; }
+  .body.no-detail .list-col { margin-right: 0; }
+
+  /* Pin the card column to the *both-panels-open* width, so collapsing a panel
+     can't stretch it — the freed space becomes margin and the cards merely
+     shift. (Base .cards uses a looser clamp; here we know the exact geometry.)
+     ≈9px of styled-scrollbar slop is sub-perceptual and never rewraps. */
+  .cards { max-width: calc(100vw - 232px - clamp(340px, 30vw, 440px) - 32px); }
+
+  /* rail: fixed-width panel pinned left; transform-slides out when collapsed.
+     Padding/border/width stay constant so its content never reflows. */
+  .rail {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 232px;
+    padding: 18px 14px; border-right: 1px solid var(--border);
+    opacity: 1; transform: none;
+    transition: transform .35s var(--ease), opacity .22s var(--ease);
+  }
+  .body.rail-collapsed .rail {
+    padding: 18px 14px; border-right-width: 1px; /* override base collapse (which zeroed these and would reflow content) */
+    opacity: 0; transform: translateX(-100%); pointer-events: none;
+  }
+
+  /* detail: fixed-width panel pinned right; slides in on mount as the list's
+     right margin opens in step. Close still uses the graceful fade above. */
+  .detail {
+    position: absolute; top: 0; right: 0; bottom: 0; width: clamp(340px, 30vw, 440px);
+    animation: detail-in .35s var(--ease);
+  }
   .detail.closing {
     position: absolute; top: 0; right: 0; bottom: 0; width: clamp(340px, 30vw, 440px);
     z-index: 18; pointer-events: none; will-change: opacity;

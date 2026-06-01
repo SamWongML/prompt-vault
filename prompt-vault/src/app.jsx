@@ -31,6 +31,7 @@ function App() {
   const [detailMobileOpen, setDetailMobileOpen] = uS(false); // detail overlay visibility on narrow screens
   const [staggerOn, setStaggerOn] = uS(true); // card entrance plays on first load only
   const [overflowOpen, setOverflowOpen] = uS(false); // topbar ⋯ menu (narrow widths only)
+  const [booted, setBooted] = uS(false); // first paint is static — pane motion gated until mounted
 
   const searchRef = uR(null);
   const overflowRef = uR(null);
@@ -53,6 +54,17 @@ function App() {
 
   /* let the first-load card stagger play once, then stop animating on filter/search */
   uE(() => { const t = setTimeout(() => setStaggerOn(false), 800); return () => clearTimeout(t); }, []);
+
+  /* first paint is static: the detail pane is auto-selected on mount (see the
+     "keep a valid selection" effect below), but its slide-in and the list's
+     reserved-margin push should NOT play on load — only on later user-driven
+     opens/closes. Double-rAF flips `booted` after the browser has painted the
+     initial layout, so the CSS `.booted` gate lifts once the panes are in place. */
+  uE(() => {
+    let raf2;
+    const raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setBooted(true)); });
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+  }, []);
 
   /* dismiss the topbar overflow menu on Escape, an outside click, or a resize.
      The ⋯ trigger only exists at narrow widths (a container query hides it as
@@ -253,6 +265,7 @@ function App() {
 
   const bodyClass = [
     "body",
+    booted ? "booted" : "",
     railOpen ? "" : "rail-collapsed",
     selected ? "" : "no-detail",
     detailMobileOpen ? "detail-open" : "",

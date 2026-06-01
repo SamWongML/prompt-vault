@@ -223,6 +223,10 @@ function Rail({ counts, sources, source, setSource, status, setStatus, allTags, 
 function Card({ result, prompt, selected, onClick, searching, terms, idx, animateIn }) {
   const src = SRC_META[prompt.source] || SRC_META.manual;
   const snippet = prompt.content.replace(VAR_RE, "$1").trim();
+  // relbar tone mirrors which signals fired: solid clay/sage for a single
+  // signal, the blended gradient only when both keyword + meaning matched.
+  const sig = result ? result.signals : [];
+  const barTone = sig.includes("kw") && sig.includes("sem") ? "" : sig.includes("kw") ? "kw" : sig.includes("sem") ? "sem" : "";
   return (
     <article
       className={`card ${animateIn ? "enter" : ""} ${selected ? "sel" : ""}`}
@@ -235,7 +239,7 @@ function Card({ result, prompt, selected, onClick, searching, terms, idx, animat
             {result.signals.includes("kw") && <span className="sig sig-kw">keyword</span>}
             {result.signals.includes("sem") && <span className="sig sig-sem">meaning</span>}
           </div>
-          <div className="relbar" title={`relevance ${(result.relevance * 100) | 0}%`}>
+          <div className={`relbar ${barTone}`} title={`relevance ${(result.relevance * 100) | 0}%`}>
             <i style={{ width: `${Math.max(12, result.relevance * 100)}%` }} />
           </div>
         </div>

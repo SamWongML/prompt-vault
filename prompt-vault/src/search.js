@@ -140,7 +140,10 @@
         }
         const signals = [];
         if (lexical > 0 && mode !== "semantic") signals.push("kw");
-        if (semantic > 0.12 && mode !== "keyword") signals.push("sem");
+        // Match the inclusion threshold (semOrder filters > 0.08) so any result
+        // that ranked in via semantic similarity also shows the MEANING signal —
+        // otherwise docs in the 0.08–0.12 band appear with no badge at all.
+        if (semantic > 0.08 && mode !== "keyword") signals.push("sem");
         return {
           doc, lexical, semantic, fused,
           matched: bm[i].matched,

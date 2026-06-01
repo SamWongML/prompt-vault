@@ -434,6 +434,8 @@ body {
 .sig-sem { background: var(--sage-wash); color: var(--sage); }
 .relbar { width: 42px; height: 4px; border-radius: 3px; background: var(--surface-2); overflow: hidden; border: 1px solid var(--border); }
 .relbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--sage), var(--clay)); border-radius: 3px; transition: width .4s var(--ease); }
+.relbar.kw i  { background: var(--clay); }
+.relbar.sem i { background: var(--sage); }
 
 mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 

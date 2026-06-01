@@ -600,6 +600,13 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
    `overflow: hidden` on the body clips a panel as it slides past
    the edge, so it leaves cleanly instead of flashing a scrollbar.
    ============================================================ */
+/* Registered so they're animatable as <number>s: the desktop list push (below)
+   tweens these 0..1 multipliers instead of `margin`, which keeps the resize-driven
+   --detail-w change instant while the open/close toggle still eases. Must sit at
+   top level — @property can't live inside @media. */
+@property --rail-open   { syntax: "<number>"; inherits: false; initial-value: 1; }
+@property --detail-open { syntax: "<number>"; inherits: false; initial-value: 1; }
+
 @media (min-width: 1081px) {
   .body { display: block; overflow: hidden; }
   /* the grid-template-columns tween is inert under display:block, but drop
@@ -632,11 +639,18 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
      gutter; the frosted .list-head keeps its base -16px bleed to the edges. */
   .list-col {
     height: 100%;
-    margin-left: var(--rail-w); margin-right: var(--detail-w);
-    transition: margin .35s var(--ease);
+    /* Reserve the panels' widths instantly so the list edge tracks a resize in
+       lockstep with the (untransitioned) detail border. The open/close *push* is
+       animated by tweening a registered 0..1 multiplier — NOT `margin` itself —
+       so the clamp's continuous 30vw term can't trigger the .35s ease and leave
+       the right edge lagging behind the border on every resize. */
+    --rail-open: 1; --detail-open: 1;
+    margin-left:  calc(var(--rail-w)   * var(--rail-open));
+    margin-right: calc(var(--detail-w) * var(--detail-open));
+    transition: --rail-open .35s var(--ease), --detail-open .35s var(--ease);
   }
-  .body.rail-collapsed .list-col { margin-left: 0; }
-  .body.no-detail .list-col { margin-right: 0; }
+  .body.rail-collapsed .list-col { --rail-open: 0; }
+  .body.no-detail .list-col { --detail-open: 0; }
 
   /* rail: fixed-width panel pinned left; transform-slides out when collapsed.
      Padding/border/width stay constant so its content never reflows. */

@@ -51,6 +51,22 @@ function App() {
     return () => window.removeEventListener("resize", setH);
   }, []);
 
+  /* keep the rail tied to the layout it belongs to. railOpen is one flag with
+     breakpoint-dependent meaning — a persistent column on desktop, a summoned
+     overlay drawer on narrow — so crossing the 1080 boundary must re-sync it to
+     that side's default, or it strands: resize a desktop window down and the
+     sidebar lingers as a floating overlay. Only act on an actual crossing, so a
+     deliberate desktop collapse survives same-side resizes. */
+  uE(() => {
+    let wasWide = window.innerWidth > 1080;
+    const onResize = () => {
+      const nowWide = window.innerWidth > 1080;
+      if (nowWide !== wasWide) { wasWide = nowWide; setRailOpen(nowWide); }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   /* let the first-load card stagger play once, then stop animating on filter/search */
   uE(() => { const t = setTimeout(() => setStaggerOn(false), 800); return () => clearTimeout(t); }, []);
 

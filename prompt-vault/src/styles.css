@@ -328,6 +328,13 @@ body {
 .body.rail-collapsed .rail {
   padding-left: 0; padding-right: 0; border-right-width: 0;
   opacity: 0; overflow: hidden; pointer-events: none;
+  /* Pre-park the off-screen transform that the phone breakpoint also uses, so
+     entering that breakpoint while collapsed leaves the *computed* transform
+     unchanged (translateX(-102%)) and fires no transition. Without this the
+     phone rule's `transition: transform` animates the now-opaque fixed drawer
+     out from x=0 — a sidebar that flashes in and slides away at 720px.
+     Harmless on tablet (width-0 grid item) and overridden on desktop. */
+  transform: translateX(-102%);
 }
 .rail-group .label {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;

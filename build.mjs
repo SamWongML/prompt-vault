@@ -86,6 +86,12 @@ async function main() {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- Apply the saved theme before first paint so dark mode never flashes light on
+     load, and rapid reloads can't flicker mid-fade. Must be a blocking inline
+     script in <head> (runs before the body paints). The key matches LS_THEME in
+     app.jsx; React reads the same value and re-applies it, so the two never
+     disagree and the re-apply is a no-op that fires no transition. -->
+<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("promptVault.theme")||"light")}catch(e){}</script>
 <title>Prompt Vault</title>
 <meta name="description" content="A calm, developer-oriented prompt vault — hybrid search, CLI-history ingestion, multi-format copy. Fully local, single file, offline." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23bb5c3c'/%3E%3Cpath d='M9 11l5 5-5 5M17 22h7' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />

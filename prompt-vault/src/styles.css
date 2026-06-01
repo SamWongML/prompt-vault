@@ -80,7 +80,14 @@ body {
   background-image:
     radial-gradient(1200px 600px at 88% -10%, color-mix(in oklab, var(--clay) 9%, transparent), transparent 60%),
     radial-gradient(900px 500px at -5% 110%, color-mix(in oklab, var(--sage) 8%, transparent), transparent 55%);
-  transition: background-color .5s var(--ease), color .4s var(--ease);
+  /* No theme tween here: the page background snaps with the rest of the shell
+     (topbar / detail / rail panels all change with no transition too). A fade made
+     the main pane — the only place this background shows through (.list-col is
+     transparent) — the lone outlier, and because only background-color tweened
+     while the corner gradients (background-image) snapped, the switch visibly
+     swept from the borders inward. Snapping kills that sweep and flips every
+     region together; the <head> theme script means there's nothing to fade on
+     load anyway. */
 }
 #root { height: 100%; }
 

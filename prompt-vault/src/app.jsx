@@ -5,6 +5,7 @@ const { useState: uS, useEffect: uE, useRef: uR, useMemo: uM, useCallback: uC } 
 
 const LS_KEY = "promptVault.v1";
 const LS_THEME = "promptVault.theme";
+const LS_RAIL = "promptVault.rail"; // docked-sidebar collapse preference
 
 function loadState() {
   try {
@@ -13,6 +14,11 @@ function loadState() {
   } catch {}
   return window.PV_SEED;
 }
+
+/* the user's saved choice for the docked rail (desktop). It's the durable half of
+   the sidebar's two-faced state: on desktop railOpen mirrors this, on narrow widths
+   railOpen is a transient overlay flag and this is left untouched. */
+function loadRailCollapsed() { try { return localStorage.getItem(LS_RAIL) === "1"; } catch { return false; } }
 
 function App() {
   const [prompts, setPrompts] = uS(loadState);
@@ -27,7 +33,11 @@ function App() {
   const [toasts, setToasts] = uS([]);
   const [showImport, setShowImport] = uS(false);
   const [drag, setDrag] = uS(false);
-  const [railOpen, setRailOpen] = uS(() => (typeof window !== "undefined" ? window.innerWidth > 1080 : true));
+  const [railCollapsed, setRailCollapsed] = uS(loadRailCollapsed); // persisted desktop preference
+  /* live flag the layout reads. Desktop honours the saved preference; narrow widths
+     start hidden (the rail is a summoned overlay there, not a docked column). */
+  const [railOpen, setRailOpen] = uS(() =>
+    typeof window === "undefined" ? true : window.innerWidth > 1080 ? !loadRailCollapsed() : false);
   const [detailMobileOpen, setDetailMobileOpen] = uS(false); // detail overlay visibility on narrow screens
   const [staggerOn, setStaggerOn] = uS(true); // card entrance plays on first load only
   const [overflowOpen, setOverflowOpen] = uS(false); // topbar ⋯ menu (narrow widths only)
@@ -43,6 +53,7 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem(LS_THEME, theme);
   }, [theme]);
+  uE(() => { try { localStorage.setItem(LS_RAIL, railCollapsed ? "1" : "0"); } catch {} }, [railCollapsed]);
 
   /* track topbar height so mobile drawers sit flush beneath it */
   uE(() => {
@@ -53,19 +64,22 @@ function App() {
 
   /* keep the rail tied to the layout it belongs to. railOpen is one flag with
      breakpoint-dependent meaning — a persistent column on desktop, a summoned
-     overlay drawer on narrow — so crossing the 1080 boundary must re-sync it to
-     that side's default, or it strands: resize a desktop window down and the
-     sidebar lingers as a floating overlay. Only act on an actual crossing, so a
-     deliberate desktop collapse survives same-side resizes. */
+     overlay drawer on narrow — so crossing the 1080 boundary must re-sync it, or
+     it strands: resize a desktop window down and the sidebar lingers as a floating
+     overlay. Narrowing always hides it (keeps the phone drawer shut by the time
+     720 makes it an overlay, which the CSS flash-guard depends on); widening
+     restores the *saved* preference rather than forcing open, so a deliberate
+     desktop collapse survives a narrow round-trip instead of springing back. Only
+     act on an actual crossing, so a deliberate collapse survives same-side resizes. */
   uE(() => {
     let wasWide = window.innerWidth > 1080;
     const onResize = () => {
       const nowWide = window.innerWidth > 1080;
-      if (nowWide !== wasWide) { wasWide = nowWide; setRailOpen(nowWide); }
+      if (nowWide !== wasWide) { wasWide = nowWide; setRailOpen(nowWide ? !railCollapsed : false); }
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
+  }, [railCollapsed]);
 
   /* let the first-load card stagger play once, then stop animating on filter/search */
   uE(() => { const t = setTimeout(() => setStaggerOn(false), 800); return () => clearTimeout(t); }, []);
@@ -273,7 +287,7 @@ function App() {
       {/* top bar */}
       <header className="topbar">
         <div className="topbar-brand">
-          <button className="mark" onClick={() => setRailOpen((v) => !v)} title={railOpen ? "Collapse sidebar" : "Expand sidebar"} aria-label="Toggle sidebar">
+          <button className="mark" onClick={() => { const n = !railOpen; if (window.innerWidth > 1080) setRailCollapsed(!n); setRailOpen(n); }} title={railOpen ? "Collapse sidebar" : "Expand sidebar"} aria-label="Toggle sidebar">
             <Icon d="prompt" size={20} sw={2} style={{ color: "#fff" }} />
           </button>
           <span>

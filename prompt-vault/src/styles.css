@@ -618,6 +618,14 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
    resize-driven width change stays instant. Must sit at top level — @property
    can't live inside @media. */
 @property --rail-open { syntax: "<number>"; inherits: false; initial-value: 1; }
+/* Drive the multiplier at *all* widths, not just inside the desktop block below.
+   Otherwise it falls back to the @property initial (1) under 1080, and crossing up
+   into the desktop layout — where the transition lives — animates 1→0 while collapsed,
+   flashing a phantom rail-width left margin that shoves the cards right then releases.
+   Pre-parked here, the value is already 0 on tablet, so the crossing is 0→0 (no tween);
+   the transition stays desktop-only, so a deliberate toggle there still eases. */
+.list-col { --rail-open: 1; }
+.body.rail-collapsed .list-col { --rail-open: 0; }
 
 @media (min-width: 1081px) {
   .body { display: block; overflow: hidden; }
@@ -642,12 +650,10 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
      base -16px bleed to the edges. */
   .list-col {
     height: 100%;
-    --rail-open: 1;
-    margin-left:  calc(var(--rail-w) * var(--rail-open));
+    margin-left:  calc(var(--rail-w) * var(--rail-open)); /* multiplier set globally above */
     margin-right: var(--detail-w);
     transition: --rail-open .35s var(--ease);
   }
-  .body.rail-collapsed .list-col { --rail-open: 0; }
 
   /* rail: fixed-width panel pinned left; transform-slides out when collapsed.
      Padding/border/width stay constant so its content never reflows. */

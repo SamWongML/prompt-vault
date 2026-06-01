@@ -632,8 +632,10 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 
   /* Detail-pane width — single source of truth (the Option B move). Extra width
      on wide screens flows into the panel, where the full prompt lives, instead of
-     becoming a gap beside the cards. ~360 at laptop widths → caps 760 by ~2530px. */
-  .body { --detail-w: clamp(360px, 30vw, 760px); }
+     becoming a gap beside the cards. Floor is 440 (== the mobile/tablet expanded
+     pane width) so crossing the 1080 breakpoint doesn't jump the pane; caps 760 by
+     ~2530px. */
+  .body { --detail-w: clamp(440px, 30vw, 760px); }
   /* Past ~2200px, cap and centre the whole UI so ultrawide never strands the layout
      against one edge (Notion/GitHub move). Below 2200 this is a no-op. */
   .app { max-width: 2200px; margin-inline: auto; }

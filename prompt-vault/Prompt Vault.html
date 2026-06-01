@@ -617,21 +617,38 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
      it so a resize across the 1080 boundary can't briefly animate the row */
   .body, .body.rail-collapsed, .body.no-detail, .body.rail-collapsed.no-detail { transition: none; }
 
+  /* Detail-pane width — single source of truth (the Option B move). Extra width
+     on wide screens flows into the panel, where the full prompt lives, instead of
+     becoming a gap beside the cards. ~360 at laptop widths → caps 760 by ~2530px. */
+  .body { --detail-w: clamp(360px, 30vw, 760px); }
+  /* Past ~2200px, cap and centre the whole UI so ultrawide never strands the layout
+     against one edge (Notion/GitHub move). Below 2200 this is a no-op. */
+  .app { max-width: 2200px; margin-inline: auto; }
+
   /* list: in-flow, full height; margins reserve the two panels' widths and
      are the only thing that animates the push (cheap — capped cards just shift) */
   .list-col {
     height: 100%;
-    margin-left: 232px; margin-right: clamp(340px, 30vw, 440px);
+    margin-left: 232px; margin-right: var(--detail-w);
     transition: margin .35s var(--ease);
+    /* Readable, centred measure (the Linear move). A comfortable line length
+       the cards *and* the list header both align to. Capped at
+       min(820px, both-panels-open width): viewport-driven, never
+       collapse-state-driven, so the value is *constant* across a rail/detail
+       collapse — only the centring margins change, the cards never re-wrap
+       mid-slide. That keeps the old pinned-width no-reflow guarantee while
+       turning freed space on wide/ultrawide screens into balanced margins
+       instead of a one-sided void. */
+    --measure: min(820px, calc(100vw - 232px - var(--detail-w) - 32px));
   }
   .body.rail-collapsed .list-col { margin-left: 0; }
   .body.no-detail .list-col { margin-right: 0; }
 
-  /* Pin the card column to the *both-panels-open* width, so collapsing a panel
-     can't stretch it — the freed space becomes margin and the cards merely
-     shift. (Base .cards uses a looser clamp; here we know the exact geometry.)
-     ≈9px of styled-scrollbar slop is sub-perceptual and never rewraps. */
-  .cards { max-width: calc(100vw - 232px - clamp(340px, 30vw, 440px) - 32px); }
+  /* Centre the cards and the header to that same measure. margin-inline:auto
+     overrides the header's base -16px bleed; the frosted strip then sits over
+     the column (nothing lives in the side margins to need blurring). */
+  .cards { max-width: var(--measure); margin-inline: auto; }
+  .list-head { max-width: var(--measure); margin-inline: auto; }
 
   /* rail: fixed-width panel pinned left; transform-slides out when collapsed.
      Padding/border/width stay constant so its content never reflows. */
@@ -649,11 +666,11 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
   /* detail: fixed-width panel pinned right; slides in on mount as the list's
      right margin opens in step. Close still uses the graceful fade above. */
   .detail {
-    position: absolute; top: 0; right: 0; bottom: 0; width: clamp(340px, 30vw, 440px);
+    position: absolute; top: 0; right: 0; bottom: 0; width: var(--detail-w);
     animation: detail-in .35s var(--ease);
   }
   .detail.closing {
-    position: absolute; top: 0; right: 0; bottom: 0; width: clamp(340px, 30vw, 440px);
+    position: absolute; top: 0; right: 0; bottom: 0; width: var(--detail-w);
     z-index: 18; pointer-events: none; will-change: opacity;
     animation: detail-out .22s linear forwards;
   }

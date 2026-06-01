@@ -31,7 +31,6 @@ function App() {
   const [detailMobileOpen, setDetailMobileOpen] = uS(false); // detail overlay visibility on narrow screens
   const [staggerOn, setStaggerOn] = uS(true); // card entrance plays on first load only
   const [overflowOpen, setOverflowOpen] = uS(false); // topbar ⋯ menu (narrow widths only)
-  const [booted, setBooted] = uS(false); // first paint is static — pane motion gated until mounted
 
   const searchRef = uR(null);
   const overflowRef = uR(null);
@@ -54,17 +53,6 @@ function App() {
 
   /* let the first-load card stagger play once, then stop animating on filter/search */
   uE(() => { const t = setTimeout(() => setStaggerOn(false), 800); return () => clearTimeout(t); }, []);
-
-  /* first paint is static: the detail pane is auto-selected on mount (see the
-     "keep a valid selection" effect below), but its slide-in and the list's
-     reserved-margin push should NOT play on load — only on later user-driven
-     opens/closes. Double-rAF flips `booted` after the browser has painted the
-     initial layout, so the CSS `.booted` gate lifts once the panes are in place. */
-  uE(() => {
-    let raf2;
-    const raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setBooted(true)); });
-    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
-  }, []);
 
   /* dismiss the topbar overflow menu on Escape, an outside click, or a resize.
      The ⋯ trigger only exists at narrow widths (a container query hides it as
@@ -89,15 +77,23 @@ function App() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2200);
   }, []);
 
-  /* keyboard: cmd/ctrl-K focus, esc clear */
+  /* keyboard: cmd/ctrl-K focus; Escape clears the search, else retracts the
+     narrow-screen detail drawer. With the close button gone, the scrim is the
+     pointer affordance and Escape is the keyboard one (the WAI dialog pattern).
+     Guard contentEditable so Escape mid-edit doesn't yank the drawer shut and
+     drop an unsaved title/body. */
   uE(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchRef.current && searchRef.current.focus(); }
-      else if (e.key === "Escape" && document.activeElement === searchRef.current && query) { setQuery(""); }
+      else if (e.key === "Escape") {
+        const ae = document.activeElement;
+        if (ae === searchRef.current && query) setQuery("");
+        else if (detailMobileOpen && !(ae && ae.isContentEditable)) setDetailMobileOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [query]);
+  }, [query, detailMobileOpen]);
 
   /* counts for sidebar (respect search-independent buckets)
      Library counts stay global; Status counts reflect the selected library so
@@ -160,25 +156,12 @@ function App() {
   }, [view]);
   const selected = prompts.find((p) => p.id === selId) || null;
 
-  /* graceful detail close: keep the last prompt mounted and animate it out when
-     the selection clears (e.g. the list becomes empty) instead of snapping shut */
-  const [exiting, setExiting] = uS(null);
-  const prevSel = uR(null);
-  const exitTimer = uR(null);
-  uE(() => {
-    if (selected) {
-      prevSel.current = selected;
-      if (exitTimer.current) { clearTimeout(exitTimer.current); exitTimer.current = null; }
-      setExiting(null);
-    } else if (prevSel.current && !exitTimer.current) {
-      setExiting(prevSel.current);
-      prevSel.current = null;
-      setDetailMobileOpen(false); // mobile: slide the drawer out
-      exitTimer.current = setTimeout(() => { setExiting(null); exitTimer.current = null; }, 240);
-    }
-  }, [selected]);
-  const panelPrompt = selected || exiting;
-  const closing = !selected && !!exiting;
+  /* The detail pane is a persistent column on desktop (it shows a placeholder
+     when nothing is selected), so there's no close to animate there. The only
+     thing to retract is the narrow-screen overlay drawer: when the selection
+     clears (the list filtered/emptied to zero) slide it out to reveal the list.
+     A normal scrim/Esc close keeps the selection, so its content stays put. */
+  uE(() => { if (!selected) setDetailMobileOpen(false); }, [selected]);
 
   /* mutations */
   const update = uC((id, patch, silent) => {
@@ -265,9 +248,7 @@ function App() {
 
   const bodyClass = [
     "body",
-    booted ? "booted" : "",
     railOpen ? "" : "rail-collapsed",
-    selected ? "" : "no-detail",
     detailMobileOpen ? "detail-open" : "",
   ].join(" ");
 
@@ -351,12 +332,19 @@ function App() {
           )}
         </main>
 
-        {panelPrompt && (
-          <aside className={`detail ${closing ? "closing" : ""}`}>
-            <button className="icon-btn detail-close" onClick={() => setDetailMobileOpen(false)} title="Back to list"><Icon d="x" size={16} /></button>
-            <Detail prompt={panelPrompt} onUpdate={update} onAction={action} toast={toast} />
-          </aside>
-        )}
+        <aside className="detail">
+          {selected
+            ? <Detail prompt={selected} onUpdate={update} onAction={action} toast={toast} />
+            : (
+              <div className="empty">
+                <div className="inner">
+                  <span className="glyph"><Icon d="prompt" size={26} /></span>
+                  <h3>Nothing selected</h3>
+                  <p>Select a prompt to view, copy, and edit it here.</p>
+                </div>
+              </div>
+            )}
+        </aside>
 
         {/* mobile drawer scrims */}
         <div className="drawer-scrim rail-scrim" onClick={() => setRailOpen(false)} />

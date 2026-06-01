@@ -698,7 +698,7 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
   .body, .body.no-detail, .body.rail-collapsed { grid-template-columns: minmax(0,1fr) !important; }
 
   .rail {
-    position: fixed; top: var(--topbar-h, 60px); left: 0; bottom: 0; width: 268px;
+    position: fixed; top: var(--topbar-h, 60px); left: 0; bottom: 0; width: var(--rail-w);
     z-index: 45; opacity: 1 !important; pointer-events: auto !important;
     padding: 18px 14px !important; border-right: 1px solid var(--border);
     background: var(--surface); box-shadow: var(--shadow-lg);

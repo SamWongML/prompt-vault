@@ -564,7 +564,7 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 .modal-head h3 { font-family: var(--serif); font-size: 21px; font-weight: 500; margin: 0 0 4px; }
 .modal-head p { color: var(--text-2); font-size: 13.5px; margin: 0; line-height: 1.5; }
 .modal-body { padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; }
-.src-opt { display: flex; align-items: center; gap: 13px; padding: 14px; border: 1px solid var(--border); border-radius: 13px; cursor: pointer; background: var(--raised); transition: all .2s var(--ease); text-align: left; }
+.src-opt { display: flex; align-items: center; gap: 13px; padding: 14px; border: 1px solid var(--border); border-radius: 13px; cursor: pointer; background: var(--raised); transition: all .2s var(--ease); text-align: left; color: inherit; /* <button> options don't inherit text color by default — without this they render in UA button-text (dark in dark mode) while the <label> option stays light */ }
 .src-opt:hover { border-color: var(--clay-soft); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
 .src-opt .si { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; flex-shrink: 0; }
 .src-opt .si svg { width: 20px; height: 20px; }

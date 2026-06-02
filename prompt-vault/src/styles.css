@@ -538,25 +538,9 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 .toast svg { width: 16px; height: 16px; color: var(--clay-soft); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
 
-/* ---- Import drop overlay ---- */
-.dropzone {
-  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center;
-  background: color-mix(in oklab, var(--bg) 78%, transparent); backdrop-filter: blur(6px);
-  animation: fade .25s var(--ease);
-}
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-.dropzone .box {
-  width: min(520px, 80vw); padding: 44px; border-radius: 22px; text-align: center;
-  border: 2px dashed var(--clay-soft); background: var(--surface);
-  display: flex; flex-direction: column; align-items: center; gap: 14px; box-shadow: var(--shadow-lg);
-}
-.dropzone .box.over { border-color: var(--clay); background: var(--raised); transform: scale(1.01); }
-.dropzone h3 { font-family: var(--serif); font-size: 24px; margin: 0; font-weight: 500; }
-.dropzone p { color: var(--text-2); font-size: 14px; margin: 0; }
-.dropzone .bigico { width: 60px; height: 60px; border-radius: 18px; background: var(--clay-wash); color: var(--clay); display: grid; place-items: center; }
-.dropzone .bigico svg { width: 30px; height: 30px; }
 
-/* ---- Modal (import sample) ---- */
+/* ---- Modal (ingest sources) ---- */
 .modal-scrim { position: fixed; inset: 0; z-index: 85; background: color-mix(in oklab, var(--bg) 60%, rgba(0,0,0,.3)); backdrop-filter: blur(4px); display: grid; place-items: center; animation: fade .2s var(--ease); padding: 24px; }
 .modal { width: min(540px, 92vw); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden; animation: modal-in .3s var(--ease); }
 @keyframes modal-in { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }

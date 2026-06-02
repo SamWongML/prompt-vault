@@ -32,7 +32,6 @@ function App() {
   const [sortBy, setSortBy] = uS("recent"); // recent | uses | created | az
   const [toasts, setToasts] = uS([]);
   const [showImport, setShowImport] = uS(false);
-  const [drag, setDrag] = uS(false);
   const [railCollapsed, setRailCollapsed] = uS(loadRailCollapsed); // persisted desktop preference
   /* live flag the layout reads. Desktop honours the saved preference; narrow widths
      start hidden (the rail is a summoned overlay there, not a docked column). */
@@ -218,53 +217,48 @@ function App() {
     toast("Draft created", "plus");
   }, [toast]);
 
-  /* ingestion */
-  const ingestText = uC((text, src) => {
-    const parsed = window.parseJSONL(text, src);
-    if (!parsed.length) { toast("No user prompts found in that file", "x"); return; }
+  /* ingestion — merge already-built prompt objects, keeping only fresh ones.
+     `quiet` is for the on-launch auto-scan: it stays silent unless it finds
+     something new, and leaves the user's current view/filter untouched. */
+  const addPrompts = uC((parsed, src, quiet) => {
+    if (!parsed.length) { if (!quiet) toast("No user prompts found", "x"); return; }
     setPrompts((ps) => {
       const existing = new Set(ps.map((p) => p.content.slice(0, 120)));
       const fresh = parsed.filter((p) => !existing.has(p.content.slice(0, 120)));
-      if (!fresh.length) { toast("Already imported", "check"); return ps; }
+      if (!fresh.length) { if (!quiet) toast("Already imported", "check"); return ps; }
       setTimeout(() => toast(`Ingested ${fresh.length} prompt${fresh.length > 1 ? "s" : ""} from ${src}`, "import"), 0);
-      setSource(src); setStatus("active"); setActiveTags([]); setQuery("");
+      if (!quiet) { setSource(src); setStatus("active"); setActiveTags([]); setQuery(""); }
       return [...fresh, ...ps];
     });
   }, [toast]);
 
-  const onPick = uC((kind, file) => {
+  /* the local server reads your Codex/OpenCode history off disk and hands back
+     already-built prompt objects — we just merge them. No file picker. */
+  const scanSource = uC(async (src) => {
     setShowImport(false);
-    if (kind === "codex") ingestText(window.SAMPLE_CODEX, "codex");
-    else if (kind === "opencode") ingestText(window.SAMPLE_OPENCODE, "opencode");
-    else if (kind === "file" && file) {
-      const r = new FileReader();
-      r.onload = () => ingestText(String(r.result), /code/i.test(file.name) ? "opencode" : "codex");
-      r.readAsText(file);
-    }
-  }, [ingestText]);
+    try {
+      toast("Reading your history…", "import");
+      const res = await fetch(`/api/scan?source=${src}`);
+      if (!res.ok) throw new Error((await res.text().catch(() => "")) || "Couldn't read your history");
+      const { prompts: found, notes } = await res.json();
+      // a note with nothing found = the source was unavailable (e.g. OpenCode on
+      // Node < 22.5) — show why instead of a misleading "no prompts found".
+      if (notes && notes.length && !found.length) return toast(notes[0], "x");
+      addPrompts(found, src);
+    } catch (e) { toast(e.message || "Couldn't read your history", "x"); }
+  }, [addPrompts, toast]);
 
-  /* global drag-drop */
+  /* auto-ingest on launch — quietly pull anything new out of local history */
   uE(() => {
-    let depth = 0;
-    const over = (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) { e.preventDefault(); depth++; setDrag(true); } };
-    const leave = (e) => { depth--; if (depth <= 0) { depth = 0; setDrag(false); } };
-    const drop = (e) => {
-      e.preventDefault(); depth = 0; setDrag(false);
-      const f = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) { const r = new FileReader(); r.onload = () => ingestText(String(r.result), /code/i.test(f.name) ? "opencode" : "codex"); r.readAsText(f); }
-    };
-    const dragover = (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); };
-    window.addEventListener("dragenter", over);
-    window.addEventListener("dragover", dragover);
-    window.addEventListener("dragleave", leave);
-    window.addEventListener("drop", drop);
-    return () => {
-      window.removeEventListener("dragenter", over);
-      window.removeEventListener("dragover", dragover);
-      window.removeEventListener("dragleave", leave);
-      window.removeEventListener("drop", drop);
-    };
-  }, [ingestText]);
+    (async () => {
+      try {
+        const res = await fetch("/api/scan?source=all");
+        if (!res.ok) return;
+        const { prompts: found } = await res.json();
+        addPrompts(found, "history", true);
+      } catch {}
+    })();
+  }, [addPrompts]);
 
   const SORT_LABELS = { recent: "Recent", uses: "Most used", created: "Newest", az: "A–Z" };
   const cycleSort = () => {
@@ -381,8 +375,7 @@ function App() {
         <div className="drawer-scrim detail-scrim" onClick={() => setDetailMobileOpen(false)} />
       </div>
 
-      {drag && <DropOverlay over={drag} />}
-      {showImport && <ImportModal onClose={() => setShowImport(false)} onPick={onPick} />}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} onScan={scanSource} />}
       <Toasts items={toasts} />
     </div>
   );

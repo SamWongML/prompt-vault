@@ -1,42 +1,49 @@
 # Prompt Vault
 
-A calm, developer-oriented **prompt vault** — one page, fully local, offline.
-Store prompts, find them with **hybrid search** (keyword *and* meaning), ingest
-your own prompts straight out of **Codex / OpenCode** CLI history, and copy any
-prompt in the format you need (Raw · Markdown · XML · JSON) with `{{variable}}`
-fill-ins.
+A calm, developer-oriented **prompt vault** — fully local. Store prompts, find
+them with **hybrid search** (keyword *and* meaning), and copy any prompt in the
+format you need (Raw · Markdown · XML · JSON) with `{{variable}}` fill-ins.
 
-The whole app ships as **one self-contained HTML file** — no build, no server,
-no network needed to run it. Copy it anywhere and open it.
+Run it from the CLI and it starts a tiny local server, opens in your browser, and
+**auto-ingests your own prompts straight out of your Codex / OpenCode history** —
+read off disk on your machine, nothing leaves it.
 
 ```
 prompt-vault/
-  Prompt Vault.html   ← the app: a single portable file (committed, ready to run)
-  src/                ← editable source (recreated 1:1 from the Claude Design handoff)
+  Prompt Vault.html   ← the built UI (one file), served by the CLI
+  src/                ← editable UI source
     styles.css        ·  design system + layout + motion
-    data.js           ·  seed prompts + real .jsonl ingestion (Codex/OpenCode)
+    data.js           ·  seed prompts + the vault-entry factory
     search.js         ·  hybrid search — BM25 + concept-vector semantics, fused with RRF
-    components.jsx    ·  UI building blocks (icons, search, rail, cards, detail, modals)
+    components.jsx    ·  UI building blocks (icons, search, rail, cards, detail, modal)
     app.jsx           ·  app state, filtering, ingestion, shortcuts, persistence
     vendor/           ·  React + ReactDOM (production UMD), inlined at build time
-build.mjs             ← assembles the self-contained HTML (esbuild precompiles the JSX)
-bin/prompt-vault.mjs  ← cross-platform CLI launcher
+server/
+  server.mjs          ← local HTTP server: serves the UI + the /api/scan endpoint
+  ingest.mjs          ← reads Codex .jsonl + OpenCode SQLite (node:sqlite) off disk
+build.mjs             ← assembles the single-file UI (esbuild precompiles the JSX)
+bin/prompt-vault.mjs  ← CLI: start the server + open the browser
 ```
 
 ## Run it
 
-**Portable (no tooling):** open `prompt-vault/Prompt Vault.html` directly in any
-browser — double-click it, or drag it onto a browser window. That's the whole app.
-
-**From the CLI:**
-
 ```bash
-npm start                 # opens the app in your default browser
-# or, after `npm link` / global install:
-prompt-vault
-# or directly:
-node bin/prompt-vault.mjs
+npx @senwong/prompt-vault          # no install — fetch & run
+# or install it:
+npm install -g @senwong/prompt-vault
+prompt-vault                       # starts the server + opens your browser
 ```
+
+Flags: `--port <n>` to pin a port, `--no-open` to start without opening a browser.
+Override where it looks for history with the `CODEX_HOME` / `OPENCODE_DATA_DIR`
+environment variables.
+
+On launch it quietly scans your Codex (`~/.codex/sessions`) and OpenCode
+(`~/.local/share/opencode/opencode.db`) history and merges in anything new; the
+**Ingest** button re-scans on demand. Your vault persists in the browser
+(`localStorage`).
+
+> Requires **Node ≥ 22.5** — the OpenCode reader uses the built-in `node:sqlite`.
 
 ## Rebuild from source
 
@@ -60,10 +67,10 @@ vendored on first build into `src/vendor/` so later builds work fully offline.
   network. Toggle **Hybrid / Keyword / Semantic**; cards show `keyword`/`meaning`
   signal chips and a relevance bar. (e.g. *"make my code run faster"* surfaces
   *"Optimize a slow SQL query"* by meaning.)
-- **Ingest CLI history** — drag any `.jsonl` onto the window, or use the Ingest
-  panel's Codex / OpenCode samples. It parses real rollout transcripts and keeps
-  only your prompts (skips environment envelopes and assistant turns), deriving
-  the originating project from the session `cwd`.
+- **Ingest CLI history** — auto-ingested on launch, or re-scan from the Ingest
+  panel. The server reads your real Codex rollout transcripts and OpenCode
+  database and keeps only your prompts (skips environment envelopes and assistant
+  turns), deriving the originating project from the session `cwd`.
 - **Copy in 4 formats** — Raw, Markdown, XML (`<prompt>`), JSON — with
   `{{variable}}` fill-ins that flow into every format.
 - **Management** — pin (floats to top), inline edit, duplicate, archive, delete,
@@ -75,16 +82,13 @@ vendored on first build into `src/vendor/` so later builds work fully offline.
 ## Do you need a database?
 
 **No.** Prompt Vault persists to your browser's `localStorage`, which keeps it
-zero-infrastructure and portable — nothing to install or run. If you ever want
-shared or cross-device sync, that's when a backing store would make sense; for a
-local single-user vault it isn't needed.
-
-> Note: when opened via `file://`, some browsers restrict `localStorage`. Edits
-> still work for the session; if you want guaranteed persistence, serve the file
-> from any static server (e.g. `npx serve prompt-vault`).
+zero-infrastructure — nothing to provision. The CLI serves the app over
+`http://localhost`, so persistence is reliable. If you ever want shared or
+cross-device sync, that's when a backing store would make sense; for a local
+single-user vault it isn't needed.
 
 ## Origin
 
 Recreated from a Claude Design (`claude.ai/design`) handoff bundle. `src/` mirrors
-the design prototype's files verbatim; the portable single-file build and CLI
-launcher are the production packaging.
+the design prototype's files; the single-file UI build, local server, and CLI are
+the production packaging.

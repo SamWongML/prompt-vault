@@ -38,22 +38,25 @@ const VENDOR_FILES = [
 
 const exists = async (p) => access(p, constants.F_OK).then(() => true).catch(() => false);
 
+// Vendor a text asset (cached once in src/vendor so later builds are offline).
+async function vendorText(file, url) {
+  const dest = join(VENDOR, file);
+  if (!(await exists(dest))) {
+    process.stdout.write(`  fetching ${file} … `);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`failed to fetch ${url}: ${res.status}`);
+    const text = await res.text();
+    await writeFile(dest, text);
+    console.log(`${(text.length / 1024).toFixed(0)} KB`);
+  }
+  return readFile(dest, "utf8");
+}
+
 async function ensureVendor() {
   await mkdir(VENDOR, { recursive: true });
-  const out = [];
-  for (const { file, url } of VENDOR_FILES) {
-    const dest = join(VENDOR, file);
-    if (!(await exists(dest))) {
-      process.stdout.write(`  fetching ${file} … `);
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`failed to fetch ${url}: ${res.status}`);
-      const text = await res.text();
-      await writeFile(dest, text);
-      console.log(`${(text.length / 1024).toFixed(0)} KB`);
-    }
-    out.push(await readFile(dest, "utf8"));
-  }
-  return out.join("\n");
+  const react = [];
+  for (const { file, url } of VENDOR_FILES) react.push(await vendorText(file, url));
+  return { react: react.join("\n") };
 }
 
 async function compileApp() {
@@ -79,7 +82,7 @@ async function compileApp() {
 async function main() {
   console.log("Prompt Vault — building self-contained HTML");
 
-  const [react, css, app] = await Promise.all([ensureVendor(), readFile(join(SRC, "styles.css"), "utf8"), compileApp()]);
+  const [{ react }, css, app] = await Promise.all([ensureVendor(), readFile(join(SRC, "styles.css"), "utf8"), compileApp()]);
 
   const html = `<!DOCTYPE html>
 <html lang="en">

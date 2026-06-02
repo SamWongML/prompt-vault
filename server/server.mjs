@@ -5,7 +5,7 @@
 
    Routes:
      GET /                         → the app (built "Prompt Vault.html")
-     GET /api/scan?source=codex    → { prompts: [...] }  (codex|opencode|all)
+     GET /api/scan?source=codex    → { prompts: [...] }  (codex|opencode|claude|all)
    ============================================================ */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";

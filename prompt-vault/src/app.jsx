@@ -228,7 +228,14 @@ function App() {
     if (!parsed.length) { if (!quiet) toast("No user prompts found", "x"); return; }
     setPrompts((ps) => {
       const existing = new Set(ps.map((p) => p.content.slice(0, 120)));
-      const fresh = parsed.filter((p) => !existing.has(p.content.slice(0, 120)));
+      // dedup against the vault *and* within this batch — an all-source scan can
+      // return the same prompt twice (e.g. typed in both Claude and Codex).
+      const fresh = parsed.filter((p) => {
+        const k = p.content.slice(0, 120);
+        if (existing.has(k)) return false;
+        existing.add(k);
+        return true;
+      });
       if (!fresh.length) { if (!quiet) toast("Already imported", "check"); return ps; }
       setTimeout(() => toast(`Ingested ${fresh.length} prompt${fresh.length > 1 ? "s" : ""} from ${src}`, "import"), 0);
       if (!quiet) { setSource(src); setStatus("active"); setActiveTags([]); setQuery(""); }
@@ -342,7 +349,7 @@ function App() {
                 <h3>{searching ? "Nothing matches" : "No prompts here yet"}</h3>
                 <p>{searching
                   ? "Try fewer words, or switch to Semantic mode to match on meaning rather than exact terms."
-                  : "Create a prompt, or ingest your Codex / OpenCode history to fill the vault."}</p>
+                  : "Create a prompt, or ingest your Codex, OpenCode, or Claude Code history to fill the vault."}</p>
                 {!searching && <button className="btn btn-primary" onClick={newPrompt} style={{ marginTop: 4 }}><Icon d="plus" size={16} /> New prompt</button>}
               </div>
             </div>

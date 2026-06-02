@@ -144,8 +144,10 @@ export function scanClaude() {
     let o;
     try { o = JSON.parse(s); } catch { continue; }
     const txt = reifyClaude(String(o.display || ""), o.pastedContents).trim();
-    // skip slash commands (CLI meta-inputs) and very short entries
-    if (txt.startsWith("/") || txt.length < 8) continue;
+    // skip slash commands (CLI meta-inputs) and very short entries. Match a real
+    // command token (/word, /ns:cmd) — not any leading "/", which also drops
+    // legit prompts that open with a path (e.g. "/api/scan returns 500").
+    if (/^\/[\w:-]+(\s|$)/.test(txt) || txt.length < 8) continue;
     // an entry that's *only* an unrecoverable paste stub reifies to bare
     // "[Pasted text …]" — drop it rather than store the placeholder as a prompt
     if (!txt.replace(PASTE_STUB, "").trim()) continue;

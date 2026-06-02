@@ -190,7 +190,7 @@ function Rail({ counts, sources, source, setSource, status, setStatus, allTags, 
         <div className="label">Library</div>
         {srcRows.map(([k, label, ic]) => (
           <button key={k} className={`nav-item ${source === k ? "on" : ""}`} onClick={() => setSource(k)}>
-            <span className="ico" style={{ color: k === "codex" ? "var(--clay)" : k === "opencode" ? "var(--sage)" : k === "claude" ? "var(--amber)" : undefined }}>
+            <span className="ico" style={{ color: k === "all" || k === "manual" ? undefined : SRC_META[k].color }}>
               <Icon d={ic} size={16} />
             </span>
             {label}

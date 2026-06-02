@@ -7,7 +7,7 @@
 Hybrid search · multi-format copy · zero-click ingestion of your
 Codex, OpenCode &amp; Claude Code history — all on your machine, nothing leaves it.
 
-[![npm](https://img.shields.io/npm/v/@senwong/prompt-vault?color=bb5c3c&label=npm)](https://www.npmjs.com/package/@senwong/prompt-vault)
+[![npm](https://img.shields.io/npm/v/@z2r0/prompt-vault?color=bb5c3c&label=npm)](https://www.npmjs.com/package/@z2r0/prompt-vault)
 [![node](https://img.shields.io/badge/node-%E2%89%A5%2022.5-5d7460)](#requirements)
 [![license: MIT](https://img.shields.io/badge/license-MIT-8a8a8a)](#license)
 [![local-first](https://img.shields.io/badge/local--first-no%20network-bb5c3c)](#license)
@@ -22,7 +22,7 @@ format you need — with `{{variable}}` fill-ins. It can also read your prompts 
 of your local CLI-agent history, so the vault fills itself.
 
 ```bash
-npx @senwong/prompt-vault     # run it — no install
+npx @z2r0/prompt-vault     # run it — no install
 ```
 
 ## Features
@@ -49,10 +49,10 @@ npx @senwong/prompt-vault     # run it — no install
 
 ```bash
 # Run once, no install:
-npx @senwong/prompt-vault
+npx @z2r0/prompt-vault
 
 # Or install it globally:
-npm install -g @senwong/prompt-vault
+npm install -g @z2r0/prompt-vault
 prompt-vault
 ```
 

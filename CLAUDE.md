@@ -1,7 +1,7 @@
 # CLAUDE.md — Prompt Vault
 
 Calm, developer-oriented prompt manager: hybrid search, CLI-history ingestion,
-multi-format copy. Ships as an **npm CLI package** (`@senwong/prompt-vault`): `npm start`
+multi-format copy. Ships as an **npm CLI package** (`@z2r0/prompt-vault`): `npm start`
 boots a tiny local server (`node:http`, bound to `127.0.0.1`, port 7331) that serves one
 self-contained HTML file and opens it in the browser. The page is offline and still works
 double-clicked, but **CLI-history ingestion needs the server** — it scans Codex/OpenCode

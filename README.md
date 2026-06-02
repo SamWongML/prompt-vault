@@ -1,94 +1,140 @@
+<div align="center">
+
 # Prompt Vault
 
-A calm, developer-oriented **prompt vault** — fully local. Store prompts, find
-them with **hybrid search** (keyword *and* meaning), and copy any prompt in the
-format you need (Raw · Markdown · XML · JSON) with `{{variable}}` fill-ins.
+**A calm, local-first prompt manager for developers.**
 
-Run it from the CLI and it starts a tiny local server, opens in your browser, and
-**auto-ingests your own prompts straight out of your Codex / OpenCode history** —
-read off disk on your machine, nothing leaves it.
+Hybrid search · multi-format copy · zero-click ingestion of your
+Codex, OpenCode &amp; Claude Code history — all on your machine, nothing leaves it.
 
-```
-prompt-vault/
-  Prompt Vault.html   ← the built UI (one file), served by the CLI
-  src/                ← editable UI source
-    styles.css        ·  design system + layout + motion
-    data.js           ·  seed prompts + the vault-entry factory
-    search.js         ·  hybrid search — BM25 + concept-vector semantics, fused with RRF
-    components.jsx    ·  UI building blocks (icons, search, rail, cards, detail, modal)
-    app.jsx           ·  app state, filtering, ingestion, shortcuts, persistence
-    vendor/           ·  React + ReactDOM (production UMD), inlined at build time
-server/
-  server.mjs          ← local HTTP server: serves the UI + the /api/scan endpoint
-  ingest.mjs          ← reads Codex .jsonl + OpenCode SQLite (node:sqlite) off disk
-build.mjs             ← assembles the single-file UI (esbuild precompiles the JSX)
-bin/prompt-vault.mjs  ← CLI: start the server + open the browser
-```
+[![npm](https://img.shields.io/npm/v/@senwong/prompt-vault?color=bb5c3c&label=npm)](https://www.npmjs.com/package/@senwong/prompt-vault)
+[![node](https://img.shields.io/badge/node-%E2%89%A5%2022.5-5d7460)](#requirements)
+[![license: MIT](https://img.shields.io/badge/license-MIT-8a8a8a)](#license)
+[![local-first](https://img.shields.io/badge/local--first-no%20network-bb5c3c)](#license)
 
-## Run it
+<img src="https://raw.githubusercontent.com/SamWongML/prompt-vault/main/assets/hero.png" alt="Prompt Vault — a prompt open in the detail panel with format tabs and variable fill-ins, next to the searchable library" width="880">
+
+</div>
+
+Prompt Vault is a tiny, self-contained app you launch from the terminal. It stores your
+prompts, finds them **by keyword _and_ by meaning**, and copies any of them in the exact
+format you need — with `{{variable}}` fill-ins. It can also read your prompts straight out
+of your local CLI-agent history, so the vault fills itself.
 
 ```bash
-npx @senwong/prompt-vault          # no install — fetch & run
-# or install it:
-npm install -g @senwong/prompt-vault
-prompt-vault                       # starts the server + opens your browser
+npx @senwong/prompt-vault     # run it — no install
 ```
-
-Flags: `--port <n>` to pin a port, `--no-open` to start without opening a browser.
-Override where it looks for history with the `CODEX_HOME` / `OPENCODE_DATA_DIR`
-environment variables.
-
-On launch it quietly scans your Codex (`~/.codex/sessions`) and OpenCode
-(`~/.local/share/opencode/opencode.db`) history and merges in anything new; the
-**Ingest** button re-scans on demand. Your vault persists in the browser
-(`localStorage`).
-
-> Requires **Node ≥ 22.5** — the OpenCode reader uses the built-in `node:sqlite`.
-
-## Rebuild from source
-
-Only needed if you edit anything in `src/`. The committed HTML is already built.
-
-```bash
-npm install      # one-time: pulls esbuild (dev only)
-npm run build    # → regenerates prompt-vault/Prompt Vault.html
-npm run dev      # build + open
-```
-
-The build concatenates the source in load order, transforms JSX → plain
-`React.createElement` with esbuild (so there's **no in-browser Babel** and no
-console warnings), then inlines the CSS and React into one HTML file. React is
-vendored on first build into `src/vendor/` so later builds work fully offline.
 
 ## Features
 
-- **Hybrid search** — real BM25 (lexical) + a local concept-vector "semantic"
-  layer, fused with Reciprocal Rank Fusion. No model download, no API key, no
-  network. Toggle **Hybrid / Keyword / Semantic**; cards show `keyword`/`meaning`
-  signal chips and a relevance bar. (e.g. *"make my code run faster"* surfaces
-  *"Optimize a slow SQL query"* by meaning.)
-- **Ingest CLI history** — auto-ingested on launch, or re-scan from the Ingest
-  panel. The server reads your real Codex rollout transcripts and OpenCode
-  database and keeps only your prompts (skips environment envelopes and assistant
-  turns), deriving the originating project from the session `cwd`.
-- **Copy in 4 formats** — Raw, Markdown, XML (`<prompt>`), JSON — with
+- **🔎 Hybrid search, fully offline.** Real BM25 lexical ranking fused (Reciprocal Rank
+  Fusion) with a local concept-vector semantic layer — no model download, no API key, no
+  network. Toggle **Hybrid / Keyword / Semantic**; every hit shows `keyword`/`meaning`
+  signal chips and a relevance bar. Searching _"make my code run faster"_ surfaces
+  _"Optimize a slow SQL query"_ by meaning.
+- **📥 Zero-click history ingestion.** On launch it quietly reads your **Codex**,
+  **OpenCode**, and **Claude Code** history off disk and merges in anything new — keeping
+  only your prompts (environment envelopes and assistant turns skipped) and tracing each
+  back to the project it came from. Re-scan any time from **Ingest**.
+- **📋 Copy in four formats.** Raw · Markdown · XML (`<prompt>`) · JSON, with
   `{{variable}}` fill-ins that flow into every format.
-- **Management** — pin (floats to top), inline edit, duplicate, archive, delete,
-  live tag editing, and sort (recent / most used / newest / A–Z).
-- **Calm UX** — warm Anthropic-inspired light theme + low-contrast dark toggle,
-  `⌘K` search, grid-aligned header, static detail panel, restrained motion,
-  fully responsive (rail and detail become overlay drawers on narrow screens).
+- **🗂️ Stay organized.** Pin to top, inline-edit, duplicate, archive, delete, live-edit
+  tags, and sort by recent / most used / newest / A–Z.
+- **🔒 Local-first by design.** Your vault lives in the browser (`localStorage`); the
+  server only ever _reads_ files on your machine. No account, no database, no telemetry.
+- **🌿 Calm, responsive UI.** A warm, Anthropic-inspired light theme with a low-contrast
+  dark mode, `⌘K` search, and a layout that folds into drawers on narrow screens.
 
-## Do you need a database?
+## Install
 
-**No.** Prompt Vault persists to your browser's `localStorage`, which keeps it
-zero-infrastructure — nothing to provision. The CLI serves the app over
-`http://localhost`, so persistence is reliable. If you ever want shared or
-cross-device sync, that's when a backing store would make sense; for a local
-single-user vault it isn't needed.
+```bash
+# Run once, no install:
+npx @senwong/prompt-vault
 
-## Origin
+# Or install it globally:
+npm install -g @senwong/prompt-vault
+prompt-vault
+```
 
-Recreated from a Claude Design (`claude.ai/design`) handoff bundle. `src/` mirrors
-the design prototype's files; the single-file UI build, local server, and CLI are
-the production packaging.
+Either way it starts a tiny local server on `127.0.0.1`, prints the URL, and opens the app
+in your browser.
+
+## Usage
+
+1. **Launch** — run `prompt-vault`. The app opens and silently ingests any new prompts
+   from your local history.
+2. **Find a prompt** — search from the top bar (or press `⌘K`). Switch **Hybrid →
+   Keyword → Semantic** to trade exact matching for meaning, and narrow the rail by source
+   (Codex / OpenCode / Claude Code / Manual), status (Pinned / Archived), or tags.
+3. **Fill &amp; copy** — open a prompt, fill any `{{variables}}`, choose a format
+   (Raw / Markdown / XML / JSON), and hit **Copy**. Your values flow into every format.
+4. **Curate** — add prompts with **New**, then pin, tag, edit, duplicate, or archive them
+   as your library grows.
+
+<div align="center">
+<img src="https://raw.githubusercontent.com/SamWongML/prompt-vault/main/assets/search.png" alt="Hybrid search in dark mode, with keyword and meaning signal chips and relevance bars on each result" width="880">
+</div>
+
+### Flags &amp; environment
+
+| Flag / env          | Effect                                                              |
+| ------------------- | ------------------------------------------------------------------ |
+| `--port <n>`        | Pin the server port (default: first free port in `7331–7350`).     |
+| `--no-open`         | Start the server without opening a browser.                        |
+| `CODEX_HOME`        | Override where Codex history is read from (default `~/.codex`).     |
+| `OPENCODE_DATA_DIR` | Override the OpenCode data dir (`~/.local/share/opencode`).         |
+
+## Requirements
+
+**Node ≥ 22.5** — the OpenCode reader uses the built-in `node:sqlite`. Everything else
+(Codex/Claude ingestion, search, copy) runs on older Node too; only OpenCode ingestion
+needs it.
+
+<details>
+<summary><b>Build from source</b></summary>
+
+Only needed if you edit the UI under `src/` — the committed HTML is already built.
+
+```bash
+git clone https://github.com/SamWongML/prompt-vault
+cd prompt-vault
+npm install      # dev-only: pulls esbuild
+npm run build    # → regenerates "prompt-vault/Prompt Vault.html"
+npm run dev      # build + open
+```
+
+The UI ships as **one self-contained HTML file**. `build.mjs` concatenates the source in
+load order, transforms JSX → `React.createElement` with esbuild (no in-browser Babel),
+then inlines the CSS and a vendored React build into a single file that works offline —
+even double-clicked. The local server (`node:http`, no Express) serves that file and
+exposes one endpoint, `/api/scan`, which does the history reading. History ingestion is
+the one feature that needs the server.
+
+</details>
+
+<details>
+<summary><b>FAQ</b></summary>
+
+**Where is my data?** In your browser's `localStorage`, served over `http://localhost`.
+Nothing is uploaded.
+
+**Do I need a database?** No. For a single-user local vault it's zero-infrastructure —
+nothing to provision. A backing store would only earn its keep if you wanted cross-device
+sync.
+
+**Does anything leave my machine?** No. Ingestion reads history files locally and the page
+makes no network calls; React is vendored, so it runs fully offline.
+
+**Which histories can it read?** Codex (`~/.codex/sessions`), OpenCode
+(`~/.local/share/opencode/opencode.db`), and Claude Code (`~/.claude/history.jsonl`). It
+keeps user prompts only.
+
+</details>
+
+## License
+
+MIT.
+
+> Recreated from a [Claude Design](https://claude.ai/design) handoff — `src/` mirrors the
+> design prototype; the single-file build, local server, and CLI are the production
+> packaging.

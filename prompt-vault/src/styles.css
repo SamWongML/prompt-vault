@@ -26,6 +26,7 @@
   --shadow-lg: 0 18px 50px -18px rgba(50,38,22,.32), 0 8px 22px -12px rgba(50,38,22,.18);
   --radius:    14px;
   --radius-sm: 9px;
+  --rail-w:    232px;   /* sidebar width — single source for the body grid + desktop slide */
   --ease:      cubic-bezier(.22,.61,.36,1);
   --ease-soft: cubic-bezier(.34,.1,.2,1);
   --ease-out:  cubic-bezier(.16,1,.3,1);
@@ -79,7 +80,14 @@ body {
   background-image:
     radial-gradient(1200px 600px at 88% -10%, color-mix(in oklab, var(--clay) 9%, transparent), transparent 60%),
     radial-gradient(900px 500px at -5% 110%, color-mix(in oklab, var(--sage) 8%, transparent), transparent 55%);
-  transition: background-color .5s var(--ease), color .4s var(--ease);
+  /* No theme tween here: the page background snaps with the rest of the shell
+     (topbar / detail / rail panels all change with no transition too). A fade made
+     the main pane — the only place this background shows through (.list-col is
+     transparent) — the lone outlier, and because only background-color tweened
+     while the corner gradients (background-image) snapped, the switch visibly
+     swept from the borders inward. Snapping kills that sweep and flips every
+     region together; the <head> theme script means there's nothing to fade on
+     load anyway. */
 }
 #root { height: 100%; }
 
@@ -309,13 +317,11 @@ body {
 /* ---- Body grid ---- */
 .body {
   display: grid;
-  grid-template-columns: 232px minmax(0,1fr) clamp(340px, 30vw, 440px);
+  grid-template-columns: var(--rail-w) minmax(0,1fr) clamp(340px, 30vw, 440px);
   min-height: 0; height: 100%; position: relative;
   transition: grid-template-columns .35s var(--ease);
 }
 .body.rail-collapsed { grid-template-columns: 0px minmax(0,1fr) clamp(340px, 30vw, 440px); }
-.body.no-detail { grid-template-columns: 232px minmax(0,1fr) 0px; }
-.body.rail-collapsed.no-detail { grid-template-columns: 0px 1fr 0px; }
 
 /* ---- Sidebar ---- */
 .rail {
@@ -329,6 +335,13 @@ body {
 .body.rail-collapsed .rail {
   padding-left: 0; padding-right: 0; border-right-width: 0;
   opacity: 0; overflow: hidden; pointer-events: none;
+  /* Pre-park the off-screen transform that the phone breakpoint also uses, so
+     entering that breakpoint while collapsed leaves the *computed* transform
+     unchanged (translateX(-102%)) and fires no transition. Without this the
+     phone rule's `transition: transform` animates the now-opaque fixed drawer
+     out from x=0 — a sidebar that flashes in and slides away at 720px.
+     Harmless on tablet (width-0 grid item) and overridden on desktop. */
+  transform: translateX(-102%);
 }
 .rail-group .label {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
@@ -389,6 +402,14 @@ body {
   padding: 15px 16px 13px; cursor: pointer; position: relative; overflow: hidden;
   transition: border-color .2s var(--ease), box-shadow .25s var(--ease), transform .25s var(--ease), background .2s var(--ease);
   will-change: transform;
+  /* Native virtualization: skip layout/paint for off-screen cards. The whole
+     history auto-ingests into one un-windowed list (hundreds of cards), so the
+     rail-collapse tween (animates .list-col margin) and any resize would reflow
+     every card each frame — O(N) jank. content-visibility bounds that to the
+     viewport. `auto` intrinsic-size seeds an estimate, then caches each card's
+     real height after first paint, so the scrollbar doesn't jump. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
 }
 .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
 .card.sel { border-color: var(--clay-soft); background: var(--raised); box-shadow: var(--shadow-md); }
@@ -428,6 +449,8 @@ body {
 .sig-sem { background: var(--sage-wash); color: var(--sage); }
 .relbar { width: 42px; height: 4px; border-radius: 3px; background: var(--surface-2); overflow: hidden; border: 1px solid var(--border); }
 .relbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--sage), var(--clay)); border-radius: 3px; transition: width .4s var(--ease); }
+.relbar.kw i  { background: var(--clay); }
+.relbar.sem i { background: var(--sage); }
 
 mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 
@@ -523,25 +546,9 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 .toast svg { width: 16px; height: 16px; color: var(--clay-soft); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
 
-/* ---- Import drop overlay ---- */
-.dropzone {
-  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center;
-  background: color-mix(in oklab, var(--bg) 78%, transparent); backdrop-filter: blur(6px);
-  animation: fade .25s var(--ease);
-}
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-.dropzone .box {
-  width: min(520px, 80vw); padding: 44px; border-radius: 22px; text-align: center;
-  border: 2px dashed var(--clay-soft); background: var(--surface);
-  display: flex; flex-direction: column; align-items: center; gap: 14px; box-shadow: var(--shadow-lg);
-}
-.dropzone .box.over { border-color: var(--clay); background: var(--raised); transform: scale(1.01); }
-.dropzone h3 { font-family: var(--serif); font-size: 24px; margin: 0; font-weight: 500; }
-.dropzone p { color: var(--text-2); font-size: 14px; margin: 0; }
-.dropzone .bigico { width: 60px; height: 60px; border-radius: 18px; background: var(--clay-wash); color: var(--clay); display: grid; place-items: center; }
-.dropzone .bigico svg { width: 30px; height: 30px; }
 
-/* ---- Modal (import sample) ---- */
+/* ---- Modal (ingest sources) ---- */
 .modal-scrim { position: fixed; inset: 0; z-index: 85; background: color-mix(in oklab, var(--bg) 60%, rgba(0,0,0,.3)); backdrop-filter: blur(4px); display: grid; place-items: center; animation: fade .2s var(--ease); padding: 24px; }
 .modal { width: min(540px, 92vw); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden; animation: modal-in .3s var(--ease); }
 @keyframes modal-in { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
@@ -549,7 +556,7 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 .modal-head h3 { font-family: var(--serif); font-size: 21px; font-weight: 500; margin: 0 0 4px; }
 .modal-head p { color: var(--text-2); font-size: 13.5px; margin: 0; line-height: 1.5; }
 .modal-body { padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; }
-.src-opt { display: flex; align-items: center; gap: 13px; padding: 14px; border: 1px solid var(--border); border-radius: 13px; cursor: pointer; background: var(--raised); transition: all .2s var(--ease); text-align: left; }
+.src-opt { display: flex; align-items: center; gap: 13px; padding: 14px; border: 1px solid var(--border); border-radius: 13px; cursor: pointer; background: var(--raised); transition: all .2s var(--ease); text-align: left; color: inherit; /* <button> options don't inherit text color by default — without this they render in UA button-text (dark in dark mode) while the <label> option stays light */ }
 .src-opt:hover { border-color: var(--clay-soft); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
 .src-opt .si { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; flex-shrink: 0; }
 .src-opt .si svg { width: 20px; height: 20px; }
@@ -573,14 +580,90 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
    on selection; content simply updates. (kept class as a no-op hook) */
 .detail-inner.swap { animation: none; }
 
-/* graceful close: lightest possible — opacity only, brief. No slide, no blur,
-   no scale. The panel simply fades while the list expands underneath. */
-@keyframes detail-out { from { opacity: 1; } to { opacity: 0; } }
+/* ============================================================
+   Desktop (≥1081) layout — static master-detail.
+
+   The rail still *moves* (it's a deliberate user toggle): it leaves
+   the grid as an out-of-flow, fixed-width column and slides with
+   `transform` (composited, no reflow), so its content is laid out
+   once at full width and never rewraps mid-slide. `overflow: hidden`
+   on the body clips it as it slides past the edge.
+
+   The detail pane, by contrast, is *persistent and static*: a
+   fixed-width column pinned right that is always present, showing a
+   placeholder when nothing is selected (the Mail.app / Linear model).
+   No entrance slide, no close fade — selecting a different prompt
+   just swaps the content. So the layout is rock-steady: nothing flies
+   in on load or on selection, and the only reflow the list ever sees
+   is the rail toggle. (This is what killed the "slides in on every
+   refresh" feel: there is no longer an animation whose mere presence
+   can fire after first paint.)
+
+   The list is the one in-flow region. Its left margin reserves the
+   rail via a 0..1 multiplier so the toggle eases; its right margin
+   reserves the detail with a *constant* width — no tween, so the
+   clamp's continuous 30vw term tracks a resize instantly with no
+   edge lag.
+   ============================================================ */
+/* Registered so it's animatable as a <number>: the rail push tweens this 0..1
+   multiplier instead of `margin`, so the open/close toggle eases while any
+   resize-driven width change stays instant. Must sit at top level — @property
+   can't live inside @media. */
+@property --rail-open { syntax: "<number>"; inherits: false; initial-value: 1; }
+/* Drive the multiplier at *all* widths, not just inside the desktop block below.
+   Otherwise it falls back to the @property initial (1) under 1080, and crossing up
+   into the desktop layout — where the transition lives — animates 1→0 while collapsed,
+   flashing a phantom rail-width left margin that shoves the cards right then releases.
+   Pre-parked here, the value is already 0 on tablet, so the crossing is 0→0 (no tween);
+   the transition stays desktop-only, so a deliberate toggle there still eases. */
+.list-col { --rail-open: 1; }
+.body.rail-collapsed .list-col { --rail-open: 0; }
+
 @media (min-width: 1081px) {
-  .detail.closing {
-    position: absolute; top: 0; right: 0; bottom: 0; width: clamp(340px, 30vw, 440px);
-    z-index: 18; pointer-events: none; will-change: opacity;
-    animation: detail-out .22s linear forwards;
+  .body { display: block; overflow: hidden; }
+  /* the grid-template-columns tween is inert under display:block, but drop
+     it so a resize across the 1080 boundary can't briefly animate the row */
+  .body, .body.rail-collapsed { transition: none; }
+
+  /* Detail-pane width — single source of truth (the Option B move). Extra width
+     on wide screens flows into the panel, where the full prompt lives, instead of
+     becoming a gap beside the cards. Floor is 440 (== the mobile/tablet expanded
+     pane width) so crossing the 1080 breakpoint doesn't jump the pane; caps 760 by
+     ~2530px. */
+  .body { --detail-w: clamp(440px, 30vw, 760px); }
+  /* Past ~2200px, cap and centre the whole UI so ultrawide never strands the layout
+     against one edge (Notion/GitHub move). Below 2200 this is a no-op. */
+  .app { max-width: 2200px; margin-inline: auto; }
+
+  /* list: in-flow, full height. Left margin reserves the rail (eased multiplier);
+     right margin reserves the always-present detail (constant — tracks a resize
+     instantly with no lag). The capped card column just shifts; it never rewraps.
+     Cards keep the .list-col base 0 16px gutter; the frosted .list-head keeps its
+     base -16px bleed to the edges. */
+  .list-col {
+    height: 100%;
+    margin-left:  calc(var(--rail-w) * var(--rail-open)); /* multiplier set globally above */
+    margin-right: var(--detail-w);
+    transition: --rail-open .35s var(--ease);
+  }
+
+  /* rail: fixed-width panel pinned left; transform-slides out when collapsed.
+     Padding/border/width stay constant so its content never reflows. */
+  .rail {
+    position: absolute; left: 0; top: 0; bottom: 0; width: var(--rail-w);
+    padding: 18px 14px; border-right: 1px solid var(--border);
+    opacity: 1; transform: none;
+    transition: transform .35s var(--ease), opacity .22s var(--ease);
+  }
+  .body.rail-collapsed .rail {
+    padding: 18px 14px; border-right-width: 1px; /* override base collapse (which zeroed these and would reflow content) */
+    opacity: 0; transform: translateX(-100%); pointer-events: none;
+  }
+
+  /* detail: persistent fixed-width column pinned right. Static — no entrance
+     animation, no close fade; content simply swaps on selection. */
+  .detail {
+    position: absolute; top: 0; right: 0; bottom: 0; width: var(--detail-w);
   }
 }
 
@@ -589,9 +672,8 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 .card:active { transform: translateY(-1px) scale(.995); }
 .nav-item:active, .tag-chip:active, .src-opt:active { transform: scale(.985); }
 
-/* drawer scrims + detail close — hidden until a narrow breakpoint turns them on */
+/* drawer scrims — hidden until a narrow breakpoint turns them on */
 .drawer-scrim { display: none; }
-.icon-btn.detail-close { display: none; }
 
 /* ============================================================
    Responsive: rail + detail become overlay drawers on narrow
@@ -601,8 +683,33 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
 /* Tablet (≤ 1080): detail slides in as a right-hand overlay; rail stays a
    toggleable column. */
 @media (max-width: 1080px) {
-  .body, .body.no-detail { grid-template-columns: 232px minmax(0,1fr) 0 !important; }
+  .body, .body.no-detail { grid-template-columns: var(--rail-w) minmax(0,1fr) 0 !important; }
   .body.rail-collapsed, .body.rail-collapsed.no-detail { grid-template-columns: 0 minmax(0,1fr) 0 !important; }
+
+  /* Rail: out-of-flow fixed-width panel that transform-slides — the same model as
+     desktop and phone, NOT an in-flow grid track whose width animates. The grid's
+     first track still tweens 0↔var(--rail-w) to reserve/release the list's space
+     (the list slides), but the rail itself keeps a constant 232px layout box, laid
+     out once, so its nav labels and tag chips never rewrap mid-toggle. (As an in-flow
+     track the rail's content width grew 0→232 every frame of the open, so multi-line
+     labels visibly un-wrapped to one line — the bug this fixes.) The rail's right edge
+     and the list's left edge stay locked together because both tweens share .35s/--ease.
+     body overflow:hidden clips the rail as it slides past the left edge. */
+  .body { overflow: hidden; }
+  /* The rail is out of flow now, so its grid track sits empty. Pin the list to
+     track 2 (the 1fr) — without this it back-fills the vacated track 1 and renders
+     232px wide under the rail. The empty track 1 still tweens 0↔var(--rail-w), so the
+     list slides exactly as before; reset to auto at phone, where the grid is 1-col. */
+  .list-col { grid-column: 2; }
+  .rail {
+    position: absolute; left: 0; top: 0; bottom: 0; width: var(--rail-w);
+    opacity: 1; transform: none;
+    transition: transform .35s var(--ease), opacity .22s var(--ease);
+  }
+  .body.rail-collapsed .rail {
+    padding: 18px 14px; border-right-width: 1px; /* hold constant — base collapse zeroed these, which would reflow the content */
+    opacity: 0; pointer-events: none; /* transform: translateX(-102%) carried from the base collapse rule slides it off */
+  }
 
   .detail {
     position: fixed; top: var(--topbar-h, 60px); right: 0; bottom: 0;
@@ -615,7 +722,6 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
     background: color-mix(in oklab, var(--bg) 22%, rgba(20,14,8,.42));
     animation: fade .25s var(--ease);
   }
-  .icon-btn.detail-close { display: grid; position: absolute; top: 14px; right: 16px; z-index: 6; background: var(--surface-2); }
 }
 
 /* Phone (≤ 720): single list column; rail becomes a left drawer, detail full-width.
@@ -624,9 +730,11 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
    padding keeps the logo anchored; the search fills whatever room is left). */
 @media (max-width: 720px) {
   .body, .body.no-detail, .body.rail-collapsed { grid-template-columns: minmax(0,1fr) !important; }
+  /* undo the tablet track-2 pin — here the grid is a single column */
+  .list-col { grid-column: auto; }
 
   .rail {
-    position: fixed; top: var(--topbar-h, 60px); left: 0; bottom: 0; width: 268px;
+    position: fixed; top: var(--topbar-h, 60px); left: 0; bottom: 0; width: var(--rail-w);
     z-index: 45; opacity: 1 !important; pointer-events: auto !important;
     padding: 18px 14px !important; border-right: 1px solid var(--border);
     background: var(--surface); box-shadow: var(--shadow-lg);
@@ -638,7 +746,11 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
     background: color-mix(in oklab, var(--bg) 22%, rgba(20,14,8,.42));
     animation: fade .25s var(--ease);
   }
-  .detail { width: 100%; }
+  /* Keep the pane off the left edge so a tappable scrim strip always remains:
+     with the close button gone, tapping the scrim (or Esc) is how you dismiss
+     the drawer, and a full-width pane on a phone would leave no scrim to tap and
+     no Esc key — a dead end. ~12vw of dimmed list stays exposed and tappable. */
+  .detail { width: min(440px, 88vw); }
 }
 
 /* reduced motion */

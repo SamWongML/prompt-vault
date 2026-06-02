@@ -223,6 +223,10 @@ function Rail({ counts, sources, source, setSource, status, setStatus, allTags, 
 function Card({ result, prompt, selected, onClick, searching, terms, idx, animateIn }) {
   const src = SRC_META[prompt.source] || SRC_META.manual;
   const snippet = prompt.content.replace(VAR_RE, "$1").trim();
+  // relbar tone mirrors which signals fired: solid clay/sage for a single
+  // signal, the blended gradient only when both keyword + meaning matched.
+  const sig = result ? result.signals : [];
+  const barTone = sig.includes("kw") && sig.includes("sem") ? "" : sig.includes("kw") ? "kw" : sig.includes("sem") ? "sem" : "";
   return (
     <article
       className={`card ${animateIn ? "enter" : ""} ${selected ? "sel" : ""}`}
@@ -235,7 +239,7 @@ function Card({ result, prompt, selected, onClick, searching, terms, idx, animat
             {result.signals.includes("kw") && <span className="sig sig-kw">keyword</span>}
             {result.signals.includes("sem") && <span className="sig sig-sem">meaning</span>}
           </div>
-          <div className="relbar" title={`relevance ${(result.relevance * 100) | 0}%`}>
+          <div className={`relbar ${barTone}`} title={`relevance ${(result.relevance * 100) | 0}%`}>
             <i style={{ width: `${Math.max(12, result.relevance * 100)}%` }} />
           </div>
         </div>
@@ -419,16 +423,16 @@ function Toasts({ items }) {
 }
 
 /* ---------- Import modal ---------- */
-function ImportModal({ onClose, onPick }) {
+function ImportModal({ onClose, onScan }) {
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>Ingest prompts</h3>
-          <p>Pull your own prompts out of local agent histories. Drop a real <code>.jsonl</code> here anytime, or load a sample to see the parse.</p>
+          <p>Pull your own prompts straight out of your local agent histories. They're read off disk on this machine — nothing leaves it.</p>
         </div>
         <div className="modal-body">
-          <button className="src-opt" onClick={() => onPick("codex")}>
+          <button className="src-opt" onClick={() => onScan("codex")}>
             <span className="si" style={{ background: "var(--clay-wash)", color: "var(--clay)" }}><Icon d="spark" size={20} /></span>
             <span>
               <div className="st">Codex CLI history</div>
@@ -436,23 +440,14 @@ function ImportModal({ onClose, onPick }) {
             </span>
             <span style={{ marginLeft: "auto", color: "var(--text-3)" }}><Icon d="chevron" size={16} /></span>
           </button>
-          <button className="src-opt" onClick={() => onPick("opencode")}>
+          <button className="src-opt" onClick={() => onScan("opencode")}>
             <span className="si" style={{ background: "var(--sage-wash)", color: "var(--sage)" }}><Icon d="layers" size={20} /></span>
             <span>
               <div className="st">OpenCode history</div>
-              <div className="sd">session transcripts (.jsonl)</div>
+              <div className="sd">~/.local/share/opencode/opencode.db</div>
             </span>
             <span style={{ marginLeft: "auto", color: "var(--text-3)" }}><Icon d="chevron" size={16} /></span>
           </button>
-          <label className="src-opt" style={{ cursor: "pointer" }}>
-            <span className="si" style={{ background: "var(--surface-2)", color: "var(--text-2)" }}><Icon d="import" size={20} /></span>
-            <span>
-              <div className="st">Choose a .jsonl file…</div>
-              <div className="sd">parsed locally — nothing leaves your machine</div>
-            </span>
-            <input type="file" accept=".jsonl,.json,application/json" style={{ display: "none" }}
-              onChange={(e) => { const f = e.target.files[0]; if (f) onPick("file", f); }} />
-          </label>
         </div>
         <div className="modal-foot">
           <span className="hint">user prompts only · envelopes &amp; assistant turns skipped</span>
@@ -463,21 +458,8 @@ function ImportModal({ onClose, onPick }) {
   );
 }
 
-/* ---------- Drop overlay ---------- */
-function DropOverlay({ over }) {
-  return (
-    <div className="dropzone">
-      <div className={`box ${over ? "over" : ""}`}>
-        <span className="bigico"><Icon d="import" size={30} /></span>
-        <h3>Drop your .jsonl</h3>
-        <p>Codex or OpenCode session files — we'll extract just your prompts.</p>
-      </div>
-    </div>
-  );
-}
-
 /* ---------- export ---------- */
 Object.assign(window, {
-  Icon, SearchBar, Rail, Card, Detail, Toasts, ImportModal, DropOverlay,
+  Icon, SearchBar, Rail, Card, Detail, Toasts, ImportModal,
   relTime, extractVars, asFormat, SRC_META,
 });

@@ -5,6 +5,7 @@ const { useState: uS, useEffect: uE, useRef: uR, useMemo: uM, useCallback: uC } 
 
 const LS_KEY = "promptVault.v1";
 const LS_THEME = "promptVault.theme";
+const LS_RAIL = "promptVault.rail"; // docked-sidebar collapse preference
 
 function loadState() {
   try {
@@ -13,6 +14,11 @@ function loadState() {
   } catch {}
   return window.PV_SEED;
 }
+
+/* the user's saved choice for the docked rail (desktop). It's the durable half of
+   the sidebar's two-faced state: on desktop railOpen mirrors this, on narrow widths
+   railOpen is a transient overlay flag and this is left untouched. */
+function loadRailCollapsed() { try { return localStorage.getItem(LS_RAIL) === "1"; } catch { return false; } }
 
 function App() {
   const [prompts, setPrompts] = uS(loadState);
@@ -26,16 +32,23 @@ function App() {
   const [sortBy, setSortBy] = uS("recent"); // recent | uses | created | az
   const [toasts, setToasts] = uS([]);
   const [showImport, setShowImport] = uS(false);
-  const [drag, setDrag] = uS(false);
-  const [railOpen, setRailOpen] = uS(() => (typeof window !== "undefined" ? window.innerWidth > 1080 : true));
+  const [railCollapsed, setRailCollapsed] = uS(loadRailCollapsed); // persisted desktop preference
+  /* live flag the layout reads. Desktop honours the saved preference; narrow widths
+     start hidden (the rail is a summoned overlay there, not a docked column). */
+  const [railOpen, setRailOpen] = uS(() =>
+    typeof window === "undefined" ? true : window.innerWidth > 1080 ? !loadRailCollapsed() : false);
   const [detailMobileOpen, setDetailMobileOpen] = uS(false); // detail overlay visibility on narrow screens
   const [staggerOn, setStaggerOn] = uS(true); // card entrance plays on first load only
   const [overflowOpen, setOverflowOpen] = uS(false); // topbar ⋯ menu (narrow widths only)
 
   const searchRef = uR(null);
   const overflowRef = uR(null);
-  const engine = uM(() => new window.PVSearch(), []);
-  engine.build(prompts);
+  /* Rebuild the search index only when the prompt set changes — not on every
+     render. build() re-tokenizes every prompt's full text (tens of ms once the
+     whole history is ingested), so running it per render put that cost on the
+     critical path of unrelated state changes (e.g. the rail-collapse toggle,
+     stalling the first animation frames). */
+  const engine = uM(() => { const e = new window.PVSearch(); e.build(prompts); return e; }, [prompts]);
 
   /* persistence */
   uE(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(prompts)); } catch {} }, [prompts]);
@@ -43,6 +56,7 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem(LS_THEME, theme);
   }, [theme]);
+  uE(() => { try { localStorage.setItem(LS_RAIL, railCollapsed ? "1" : "0"); } catch {} }, [railCollapsed]);
 
   /* track topbar height so mobile drawers sit flush beneath it */
   uE(() => {
@@ -50,6 +64,25 @@ function App() {
     setH(); window.addEventListener("resize", setH);
     return () => window.removeEventListener("resize", setH);
   }, []);
+
+  /* keep the rail tied to the layout it belongs to. railOpen is one flag with
+     breakpoint-dependent meaning — a persistent column on desktop, a summoned
+     overlay drawer on narrow — so crossing the 1080 boundary must re-sync it, or
+     it strands: resize a desktop window down and the sidebar lingers as a floating
+     overlay. Narrowing always hides it (keeps the phone drawer shut by the time
+     720 makes it an overlay, which the CSS flash-guard depends on); widening
+     restores the *saved* preference rather than forcing open, so a deliberate
+     desktop collapse survives a narrow round-trip instead of springing back. Only
+     act on an actual crossing, so a deliberate collapse survives same-side resizes. */
+  uE(() => {
+    let wasWide = window.innerWidth > 1080;
+    const onResize = () => {
+      const nowWide = window.innerWidth > 1080;
+      if (nowWide !== wasWide) { wasWide = nowWide; setRailOpen(nowWide ? !railCollapsed : false); }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [railCollapsed]);
 
   /* let the first-load card stagger play once, then stop animating on filter/search */
   uE(() => { const t = setTimeout(() => setStaggerOn(false), 800); return () => clearTimeout(t); }, []);
@@ -77,15 +110,23 @@ function App() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2200);
   }, []);
 
-  /* keyboard: cmd/ctrl-K focus, esc clear */
+  /* keyboard: cmd/ctrl-K focus; Escape clears the search, else retracts the
+     narrow-screen detail drawer. With the close button gone, the scrim is the
+     pointer affordance and Escape is the keyboard one (the WAI dialog pattern).
+     Guard contentEditable so Escape mid-edit doesn't yank the drawer shut and
+     drop an unsaved title/body. */
   uE(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchRef.current && searchRef.current.focus(); }
-      else if (e.key === "Escape" && document.activeElement === searchRef.current && query) { setQuery(""); }
+      else if (e.key === "Escape") {
+        const ae = document.activeElement;
+        if (ae === searchRef.current && query) setQuery("");
+        else if (detailMobileOpen && !(ae && ae.isContentEditable)) setDetailMobileOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [query]);
+  }, [query, detailMobileOpen]);
 
   /* counts for sidebar (respect search-independent buckets)
      Library counts stay global; Status counts reflect the selected library so
@@ -148,25 +189,12 @@ function App() {
   }, [view]);
   const selected = prompts.find((p) => p.id === selId) || null;
 
-  /* graceful detail close: keep the last prompt mounted and animate it out when
-     the selection clears (e.g. the list becomes empty) instead of snapping shut */
-  const [exiting, setExiting] = uS(null);
-  const prevSel = uR(null);
-  const exitTimer = uR(null);
-  uE(() => {
-    if (selected) {
-      prevSel.current = selected;
-      if (exitTimer.current) { clearTimeout(exitTimer.current); exitTimer.current = null; }
-      setExiting(null);
-    } else if (prevSel.current && !exitTimer.current) {
-      setExiting(prevSel.current);
-      prevSel.current = null;
-      setDetailMobileOpen(false); // mobile: slide the drawer out
-      exitTimer.current = setTimeout(() => { setExiting(null); exitTimer.current = null; }, 240);
-    }
-  }, [selected]);
-  const panelPrompt = selected || exiting;
-  const closing = !selected && !!exiting;
+  /* The detail pane is a persistent column on desktop (it shows a placeholder
+     when nothing is selected), so there's no close to animate there. The only
+     thing to retract is the narrow-screen overlay drawer: when the selection
+     clears (the list filtered/emptied to zero) slide it out to reveal the list.
+     A normal scrim/Esc close keeps the selection, so its content stays put. */
+  uE(() => { if (!selected) setDetailMobileOpen(false); }, [selected]);
 
   /* mutations */
   const update = uC((id, patch, silent) => {
@@ -193,53 +221,48 @@ function App() {
     toast("Draft created", "plus");
   }, [toast]);
 
-  /* ingestion */
-  const ingestText = uC((text, src) => {
-    const parsed = window.parseJSONL(text, src);
-    if (!parsed.length) { toast("No user prompts found in that file", "x"); return; }
+  /* ingestion — merge already-built prompt objects, keeping only fresh ones.
+     `quiet` is for the on-launch auto-scan: it stays silent unless it finds
+     something new, and leaves the user's current view/filter untouched. */
+  const addPrompts = uC((parsed, src, quiet) => {
+    if (!parsed.length) { if (!quiet) toast("No user prompts found", "x"); return; }
     setPrompts((ps) => {
       const existing = new Set(ps.map((p) => p.content.slice(0, 120)));
       const fresh = parsed.filter((p) => !existing.has(p.content.slice(0, 120)));
-      if (!fresh.length) { toast("Already imported", "check"); return ps; }
+      if (!fresh.length) { if (!quiet) toast("Already imported", "check"); return ps; }
       setTimeout(() => toast(`Ingested ${fresh.length} prompt${fresh.length > 1 ? "s" : ""} from ${src}`, "import"), 0);
-      setSource(src); setStatus("active"); setActiveTags([]); setQuery("");
+      if (!quiet) { setSource(src); setStatus("active"); setActiveTags([]); setQuery(""); }
       return [...fresh, ...ps];
     });
   }, [toast]);
 
-  const onPick = uC((kind, file) => {
+  /* the local server reads your Codex/OpenCode history off disk and hands back
+     already-built prompt objects — we just merge them. No file picker. */
+  const scanSource = uC(async (src) => {
     setShowImport(false);
-    if (kind === "codex") ingestText(window.SAMPLE_CODEX, "codex");
-    else if (kind === "opencode") ingestText(window.SAMPLE_OPENCODE, "opencode");
-    else if (kind === "file" && file) {
-      const r = new FileReader();
-      r.onload = () => ingestText(String(r.result), /code/i.test(file.name) ? "opencode" : "codex");
-      r.readAsText(file);
-    }
-  }, [ingestText]);
+    try {
+      toast("Reading your history…", "import");
+      const res = await fetch(`/api/scan?source=${src}`);
+      if (!res.ok) throw new Error((await res.text().catch(() => "")) || "Couldn't read your history");
+      const { prompts: found, notes } = await res.json();
+      // a note with nothing found = the source was unavailable (e.g. OpenCode on
+      // Node < 22.5) — show why instead of a misleading "no prompts found".
+      if (notes && notes.length && !found.length) return toast(notes[0], "x");
+      addPrompts(found, src);
+    } catch (e) { toast(e.message || "Couldn't read your history", "x"); }
+  }, [addPrompts, toast]);
 
-  /* global drag-drop */
+  /* auto-ingest on launch — quietly pull anything new out of local history */
   uE(() => {
-    let depth = 0;
-    const over = (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) { e.preventDefault(); depth++; setDrag(true); } };
-    const leave = (e) => { depth--; if (depth <= 0) { depth = 0; setDrag(false); } };
-    const drop = (e) => {
-      e.preventDefault(); depth = 0; setDrag(false);
-      const f = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) { const r = new FileReader(); r.onload = () => ingestText(String(r.result), /code/i.test(f.name) ? "opencode" : "codex"); r.readAsText(f); }
-    };
-    const dragover = (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); };
-    window.addEventListener("dragenter", over);
-    window.addEventListener("dragover", dragover);
-    window.addEventListener("dragleave", leave);
-    window.addEventListener("drop", drop);
-    return () => {
-      window.removeEventListener("dragenter", over);
-      window.removeEventListener("dragover", dragover);
-      window.removeEventListener("dragleave", leave);
-      window.removeEventListener("drop", drop);
-    };
-  }, [ingestText]);
+    (async () => {
+      try {
+        const res = await fetch("/api/scan?source=all");
+        if (!res.ok) return;
+        const { prompts: found } = await res.json();
+        addPrompts(found, "history", true);
+      } catch {}
+    })();
+  }, [addPrompts]);
 
   const SORT_LABELS = { recent: "Recent", uses: "Most used", created: "Newest", az: "A–Z" };
   const cycleSort = () => {
@@ -254,7 +277,6 @@ function App() {
   const bodyClass = [
     "body",
     railOpen ? "" : "rail-collapsed",
-    selected ? "" : "no-detail",
     detailMobileOpen ? "detail-open" : "",
   ].join(" ");
 
@@ -263,7 +285,7 @@ function App() {
       {/* top bar */}
       <header className="topbar">
         <div className="topbar-brand">
-          <button className="mark" onClick={() => setRailOpen((v) => !v)} title={railOpen ? "Collapse sidebar" : "Expand sidebar"} aria-label="Toggle sidebar">
+          <button className="mark" onClick={() => { const n = !railOpen; if (window.innerWidth > 1080) setRailCollapsed(!n); setRailOpen(n); }} title={railOpen ? "Collapse sidebar" : "Expand sidebar"} aria-label="Toggle sidebar">
             <Icon d="prompt" size={20} sw={2} style={{ color: "#fff" }} />
           </button>
           <span>
@@ -338,20 +360,26 @@ function App() {
           )}
         </main>
 
-        {panelPrompt && (
-          <aside className={`detail ${closing ? "closing" : ""}`}>
-            <button className="icon-btn detail-close" onClick={() => setDetailMobileOpen(false)} title="Back to list"><Icon d="x" size={16} /></button>
-            <Detail prompt={panelPrompt} onUpdate={update} onAction={action} toast={toast} />
-          </aside>
-        )}
+        <aside className="detail">
+          {selected
+            ? <Detail prompt={selected} onUpdate={update} onAction={action} toast={toast} />
+            : (
+              <div className="empty">
+                <div className="inner">
+                  <span className="glyph"><Icon d="prompt" size={26} /></span>
+                  <h3>Nothing selected</h3>
+                  <p>Select a prompt to view, copy, and edit it here.</p>
+                </div>
+              </div>
+            )}
+        </aside>
 
         {/* mobile drawer scrims */}
         <div className="drawer-scrim rail-scrim" onClick={() => setRailOpen(false)} />
         <div className="drawer-scrim detail-scrim" onClick={() => setDetailMobileOpen(false)} />
       </div>
 
-      {drag && <DropOverlay over={drag} />}
-      {showImport && <ImportModal onClose={() => setShowImport(false)} onPick={onPick} />}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} onScan={scanSource} />}
       <Toasts items={toasts} />
     </div>
   );

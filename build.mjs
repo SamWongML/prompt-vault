@@ -38,22 +38,25 @@ const VENDOR_FILES = [
 
 const exists = async (p) => access(p, constants.F_OK).then(() => true).catch(() => false);
 
+// Vendor a text asset (cached once in src/vendor so later builds are offline).
+async function vendorText(file, url) {
+  const dest = join(VENDOR, file);
+  if (!(await exists(dest))) {
+    process.stdout.write(`  fetching ${file} … `);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`failed to fetch ${url}: ${res.status}`);
+    const text = await res.text();
+    await writeFile(dest, text);
+    console.log(`${(text.length / 1024).toFixed(0)} KB`);
+  }
+  return readFile(dest, "utf8");
+}
+
 async function ensureVendor() {
   await mkdir(VENDOR, { recursive: true });
-  const out = [];
-  for (const { file, url } of VENDOR_FILES) {
-    const dest = join(VENDOR, file);
-    if (!(await exists(dest))) {
-      process.stdout.write(`  fetching ${file} … `);
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`failed to fetch ${url}: ${res.status}`);
-      const text = await res.text();
-      await writeFile(dest, text);
-      console.log(`${(text.length / 1024).toFixed(0)} KB`);
-    }
-    out.push(await readFile(dest, "utf8"));
-  }
-  return out.join("\n");
+  const react = [];
+  for (const { file, url } of VENDOR_FILES) react.push(await vendorText(file, url));
+  return { react: react.join("\n") };
 }
 
 async function compileApp() {
@@ -79,13 +82,19 @@ async function compileApp() {
 async function main() {
   console.log("Prompt Vault — building self-contained HTML");
 
-  const [react, css, app] = await Promise.all([ensureVendor(), readFile(join(SRC, "styles.css"), "utf8"), compileApp()]);
+  const [{ react }, css, app] = await Promise.all([ensureVendor(), readFile(join(SRC, "styles.css"), "utf8"), compileApp()]);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- Apply the saved theme before first paint so dark mode never flashes light on
+     load, and rapid reloads can't flicker mid-fade. Must be a blocking inline
+     script in <head> (runs before the body paints). The key matches LS_THEME in
+     app.jsx; React reads the same value and re-applies it, so the two never
+     disagree and the re-apply is a no-op that fires no transition. -->
+<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("promptVault.theme")||"light")}catch(e){}</script>
 <title>Prompt Vault</title>
 <meta name="description" content="A calm, developer-oriented prompt vault — hybrid search, CLI-history ingestion, multi-format copy. Fully local, single file, offline." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23bb5c3c'/%3E%3Cpath d='M9 11l5 5-5 5M17 22h7' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />

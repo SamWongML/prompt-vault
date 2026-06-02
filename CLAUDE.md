@@ -1,24 +1,11 @@
 # CLAUDE.md — Prompt Vault
 
 Calm, developer-oriented prompt manager: hybrid search, CLI-history ingestion,
-multi-format copy. Ships as **one self-contained, offline, double-clickable HTML
-file** — no server, no runtime build, no network needed to run it.
-
-## How to work here
-
-These four mirror the exact mistakes that have already cost a session in this repo.
-
-- **Don't assume — verify, then act.** Wrong, silent assumptions are the #1 failure
-  mode here. Don't guess file paths, build behavior, or APIs: `ls`/grep/read first.
-  If two readings are plausible, state both and ask rather than picking silently.
-- **Surgical changes.** Every changed line should trace to the request. Don't refactor
-  adjacent code, don't "tidy" things you weren't asked to. Match the surrounding
-  (often terse, single-line) style instead of imposing your own.
-- **Simplicity.** Would a senior engineer call this overcomplicated? The header's
-  responsive behavior is intentionally **CSS-only** (container queries) — don't reach
-  for JS width-measurement. No speculative abstractions for a single caller.
-- **Verify before you claim done.** There is no test suite. "Done" = `node build.mjs`
-  exits 0 **and** you've confirmed the change is in the built HTML (see below).
+multi-format copy. Ships as an **npm CLI package** (`@senwong/prompt-vault`): `npm start`
+boots a tiny local server (`node:http`, bound to `127.0.0.1`, port 7331) that serves one
+self-contained HTML file and opens it in the browser. The page is offline and still works
+double-clicked, but **CLI-history ingestion needs the server** — it scans Codex/OpenCode
+history server-side and hands it back via `/api/scan`. No runtime build; no network to run.
 
 ## Build & run
 
@@ -60,6 +47,19 @@ CSS + React + app into `prompt-vault/Prompt Vault.html` (note the space in the n
 - `src/styles.css` — all styles, inlined verbatim
 - `src/vendor/` — cached React/ReactDOM UMD (fetched once, then fully offline)
 
+The **CLI + server** layer (added when the app became an npm package) lives _outside_
+`src/` and is not part of the esbuild step:
+
+- `bin/prompt-vault.mjs` — the `prompt-vault` bin. Re-execs with `--experimental-sqlite`
+  if `node:sqlite` needs it, parses `--no-open`/`--port`, calls `startServer`, opens the
+  browser.
+- `server/server.mjs` — `node:http` server (no Express). Serves the built HTML at `/`,
+  exposes `GET /api/scan?source=codex|opencode|all`. Picks the first free port in
+  7331–7350 unless `--port` is given.
+- `server/ingest.mjs` — history extraction (no HTTP). `scanCodex()` reads
+  `~/.codex/sessions/**/*.jsonl`; `scanOpenCode()` reads `~/.local/share/opencode/opencode.db`
+  via built-in `node:sqlite`.
+
 ## Conventions (match these)
 
 - **Hooks are aliased** at the top of `app.jsx`: `uS`/`uE`/`uR`/`uM`/`uC` =
@@ -70,6 +70,10 @@ CSS + React + app into `prompt-vault/Prompt Vault.html` (note the space in the n
   `container-type: inline-size`; controls "shed" in `@container header (max-width:…)`
   blocks. Shedding is _reversible_ — anything mirrored in JS state (e.g. the `⋯` menu's
   open flag) must reverse with it, or it strands on screen when the window widens.
+- **The sidebar rail is the deliberate exception.** Unlike the header, the rail _does_
+  use JS: `resize` listeners in `app.jsx` sync `railOpen` to `window.innerWidth > 1080`,
+  track topbar height (`--topbar-h`), and close the `⋯` menu. That JS is intentional —
+  don't "simplify" it away — but keep new width logic out of the header itself.
 - Comments explain _why_, not _what_; keep that density.
 
 ## Git

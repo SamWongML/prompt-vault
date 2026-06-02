@@ -41,8 +41,12 @@
     design:      ["design", "architecture", "decide", "decision", "tradeoff", "approach", "choose"],
   };
   const DIMS = Object.keys(CONCEPTS);
-  // word -> list of concept dims it belongs to
-  const WORD2DIM = {};
+  // word -> list of concept dims it belongs to. Null-prototype so a token that
+  // collides with an Object.prototype key — real prompts say "constructor",
+  // "valueof", "hasOwnProperty" — can't resolve to an inherited member (which
+  // would be truthy-but-not-iterable and crash the lookup). Same reason the
+  // token-frequency maps below are null-prototype.
+  const WORD2DIM = Object.create(null);
   DIMS.forEach((dim) => CONCEPTS[dim].forEach((w) => {
     (WORD2DIM[w] = WORD2DIM[w] || []).push(dim);
   }));
@@ -71,20 +75,20 @@
     build(items) {
       this.docs = items;
       const N = items.length || 1;
-      const df = {};
+      const df = Object.create(null);
       const docTokens = [];
       let totalLen = 0;
       items.forEach((it) => {
         const text = `${it.title} ${it.title} ${it.tags.join(" ")} ${it.content}`;
         const toks = tokenize(text);
         totalLen += toks.length;
-        const tf = {};
+        const tf = Object.create(null);
         const uniq = new Set();
         toks.forEach((t) => { tf[t] = (tf[t] || 0) + 1; uniq.add(t); });
         uniq.forEach((t) => { df[t] = (df[t] || 0) + 1; });
         docTokens.push({ tf, len: toks.length, vec: conceptVector(toks) });
       });
-      const idf = {};
+      const idf = Object.create(null);
       for (const t in df) idf[t] = Math.log(1 + (N - df[t] + 0.5) / (df[t] + 0.5));
       this.index = { N, idf, docTokens, avgdl: totalLen / N || 1 };
     }
@@ -140,7 +144,10 @@
         }
         const signals = [];
         if (lexical > 0 && mode !== "semantic") signals.push("kw");
-        if (semantic > 0.12 && mode !== "keyword") signals.push("sem");
+        // Match the inclusion threshold (semOrder filters > 0.08) so any result
+        // that ranked in via semantic similarity also shows the MEANING signal —
+        // otherwise docs in the 0.08–0.12 band appear with no badge at all.
+        if (semantic > 0.08 && mode !== "keyword") signals.push("sem");
         return {
           doc, lexical, semantic, fused,
           matched: bm[i].matched,

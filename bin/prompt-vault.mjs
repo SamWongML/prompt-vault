@@ -1,45 +1,58 @@
 #!/usr/bin/env node
 /* ============================================================
-   prompt-vault — open the self-contained app in the default
-   browser. Dependency-free; works on macOS, Linux, Windows.
+   prompt-vault — start the local server and open the app.
 
    Usage:
-     prompt-vault            # if installed/linked globally
-     npm start               # from the project root
-     node bin/prompt-vault.mjs
+     prompt-vault                 # start + open the browser
+     prompt-vault --port 8080     # pin a port
+     prompt-vault --no-open       # start only (don't open a browser)
    ============================================================ */
-import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { existsSync } from "node:fs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const app = join(here, "..", "prompt-vault", "Prompt Vault.html");
+// node:sqlite is still flagged experimental, so it prints a warning the first
+// time it loads. We depend on it deliberately — filter just that one line so a
+// launch stays quiet. (Set before the server imports anything SQLite-related.)
+const _emit = process.emit;
+process.emit = function (name, data, ...rest) {
+  if (name === "warning" && data && data.name === "ExperimentalWarning" && /SQLite/.test(data.message)) return false;
+  return _emit.call(this, name, data, ...rest);
+};
 
-if (!existsSync(app)) {
-  console.error(`Prompt Vault not found at:\n  ${app}\n\nBuild it first:  npm run build`);
-  process.exit(1);
+import { spawn, spawnSync } from "node:child_process";
+import { startServer } from "../server/server.mjs";
+
+// node:sqlite powers OpenCode ingestion. On some Node versions it's gated behind
+// --experimental-sqlite, and whether the flag is required (or even still accepted)
+// varies by version — so we probe instead of guessing: if SQLite won't load as-is
+// but loads with the flag, re-exec once with it. PV_SQLITE_REEXEC guards the loop.
+// (On Node < 22.5 it loads with neither; ingest.mjs then degrades with a note.)
+if (!process.env.PV_SQLITE_REEXEC) {
+  const loads = (flags) =>
+    spawnSync(process.execPath, [...flags, "-e", "require('node:sqlite')"], { stdio: "ignore" }).status === 0;
+  if (!loads([]) && loads(["--experimental-sqlite"])) {
+    const r = spawnSync(process.execPath, ["--experimental-sqlite", ...process.argv.slice(1)],
+      { stdio: "inherit", env: { ...process.env, PV_SQLITE_REEXEC: "1" } });
+    process.exit(r.status ?? 0);
+  }
 }
 
-const { platform } = process;
-let cmd, args;
-if (platform === "darwin") {
-  cmd = "open";
-  args = [app];
-} else if (platform === "win32") {
-  // `start` is a cmd builtin; empty title arg avoids quoting issues with the path.
-  cmd = "cmd";
-  args = ["/c", "start", "", app];
-} else {
-  cmd = "xdg-open";
-  args = [app];
-}
+const args = process.argv.slice(2);
+const noOpen = args.includes("--no-open");
+const portIdx = args.indexOf("--port");
+const port = portIdx >= 0 ? args[portIdx + 1] : undefined;
 
-const child = spawn(cmd, args, { stdio: "ignore", detached: true });
-child.on("error", (err) => {
-  console.error(`Could not open the browser automatically (${err.code}).`);
-  console.error(`Open this file manually:\n  ${app}`);
-  process.exit(1);
-});
-child.unref();
-console.log(`Opening Prompt Vault →\n  ${app}`);
+const { url } = await startServer({ port });
+console.log(`\n  Prompt Vault → ${url}\n  Ctrl-C to stop.\n`);
+if (!noOpen) openBrowser(url);
+
+function openBrowser(target) {
+  const { platform } = process;
+  // `start`'s first quoted arg is the window title; an empty one keeps the URL
+  // from being swallowed as the title.
+  const [cmd, cmdArgs] =
+    platform === "darwin" ? ["open", [target]]
+    : platform === "win32" ? ["cmd", ["/c", "start", "", target]]
+    : ["xdg-open", [target]];
+  const child = spawn(cmd, cmdArgs, { stdio: "ignore", detached: true });
+  child.on("error", () => console.log(`  Couldn't open a browser — visit ${target} manually.`));
+  child.unref();
+}

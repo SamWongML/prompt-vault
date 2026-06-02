@@ -1,5 +1,5 @@
 {
-  "name": "@senwong/prompt-vault",
+  "name": "@z2r0/prompt-vault",
   "version": "1.0.0",
   "description": "A calm, developer-oriented prompt vault — hybrid search, multi-format copy, and zero-click ingestion of your local Codex & OpenCode history. Runs as a local app from the CLI.",
   "type": "module",
@@ -30,6 +30,15 @@
     "search"
   ],
   "license": "MIT",
+  "author": "senwong <senwong1991@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SamWongML/prompt-vault.git"
+  },
+  "homepage": "https://github.com/SamWongML/prompt-vault#readme",
+  "bugs": {
+    "url": "https://github.com/SamWongML/prompt-vault/issues"
+  },
   "publishConfig": {
     "access": "public"
   },

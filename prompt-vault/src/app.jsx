@@ -20,6 +20,27 @@ function loadState() {
    railOpen is a transient overlay flag and this is left untouched. */
 function loadRailCollapsed() { try { return localStorage.getItem(LS_RAIL) === "1"; } catch { return false; } }
 
+/* Flip the theme without the colour crawl. styles.css gives cards, buttons, the
+   topbar, chips etc. transitions for hover/focus — but a custom-property swap fires
+   those same transitions, so a naive toggle tweens background/border/box-shadow
+   (all main-thread *paint* properties, never composited) across every visible
+   element at once, and the recolour drops frames into a region-by-region sweep. So
+   we don't animate the swap at all: drop a global no-transition rule, flip the
+   attribute, force one synchronous style flush so the new colours snap into place
+   *under* that rule, then lift it on the next task so hover transitions resume.
+   getComputedStyle is the flush — not requestAnimationFrame, which can fire before
+   the new styles commit and let the tween leak through. This is next-themes'
+   battle-tested disableTransitionOnChange technique. */
+function applyTheme(theme) {
+  const root = document.documentElement;
+  const kill = document.createElement("style");
+  kill.appendChild(document.createTextNode("*,*::before,*::after{transition:none!important}"));
+  document.head.appendChild(kill);
+  root.setAttribute("data-theme", theme);
+  window.getComputedStyle(document.body); // commit the snap while the rule is still live
+  setTimeout(() => kill.remove(), 1);     // resume hover transitions on the next task
+}
+
 function App() {
   const [prompts, setPrompts] = uS(loadState);
   const [theme, setTheme] = uS(() => localStorage.getItem(LS_THEME) || "light");
@@ -43,6 +64,7 @@ function App() {
 
   const searchRef = uR(null);
   const overflowRef = uR(null);
+  const themeReady = uR(false); // <head> script set data-theme pre-paint; skip the flip-snap on mount
   /* Rebuild the search index only when the prompt set changes — not on every
      render. build() re-tokenizes every prompt's full text (tens of ms once the
      whole history is ingested), so running it per render put that cost on the
@@ -53,8 +75,11 @@ function App() {
   /* persistence */
   uE(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(prompts)); } catch {} }, [prompts]);
   uE(() => {
-    document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem(LS_THEME, theme);
+    /* the <head> bootstrap already set data-theme before first paint, so the
+       initial run has nothing to animate — only later user toggles need the snap. */
+    if (!themeReady.current) { themeReady.current = true; document.documentElement.setAttribute("data-theme", theme); return; }
+    applyTheme(theme);
   }, [theme]);
   uE(() => { try { localStorage.setItem(LS_RAIL, railCollapsed ? "1" : "0"); } catch {} }, [railCollapsed]);
 

@@ -686,6 +686,31 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
   .body, .body.no-detail { grid-template-columns: var(--rail-w) minmax(0,1fr) 0 !important; }
   .body.rail-collapsed, .body.rail-collapsed.no-detail { grid-template-columns: 0 minmax(0,1fr) 0 !important; }
 
+  /* Rail: out-of-flow fixed-width panel that transform-slides — the same model as
+     desktop and phone, NOT an in-flow grid track whose width animates. The grid's
+     first track still tweens 0↔var(--rail-w) to reserve/release the list's space
+     (the list slides), but the rail itself keeps a constant 232px layout box, laid
+     out once, so its nav labels and tag chips never rewrap mid-toggle. (As an in-flow
+     track the rail's content width grew 0→232 every frame of the open, so multi-line
+     labels visibly un-wrapped to one line — the bug this fixes.) The rail's right edge
+     and the list's left edge stay locked together because both tweens share .35s/--ease.
+     body overflow:hidden clips the rail as it slides past the left edge. */
+  .body { overflow: hidden; }
+  /* The rail is out of flow now, so its grid track sits empty. Pin the list to
+     track 2 (the 1fr) — without this it back-fills the vacated track 1 and renders
+     232px wide under the rail. The empty track 1 still tweens 0↔var(--rail-w), so the
+     list slides exactly as before; reset to auto at phone, where the grid is 1-col. */
+  .list-col { grid-column: 2; }
+  .rail {
+    position: absolute; left: 0; top: 0; bottom: 0; width: var(--rail-w);
+    opacity: 1; transform: none;
+    transition: transform .35s var(--ease), opacity .22s var(--ease);
+  }
+  .body.rail-collapsed .rail {
+    padding: 18px 14px; border-right-width: 1px; /* hold constant — base collapse zeroed these, which would reflow the content */
+    opacity: 0; pointer-events: none; /* transform: translateX(-102%) carried from the base collapse rule slides it off */
+  }
+
   .detail {
     position: fixed; top: var(--topbar-h, 60px); right: 0; bottom: 0;
     width: min(440px, 92vw); z-index: 40; box-shadow: var(--shadow-lg);
@@ -705,6 +730,8 @@ mark.hl { background: color-mix(in oklab, var(--gold) 38%, transparent); color: 
    padding keeps the logo anchored; the search fills whatever room is left). */
 @media (max-width: 720px) {
   .body, .body.no-detail, .body.rail-collapsed { grid-template-columns: minmax(0,1fr) !important; }
+  /* undo the tablet track-2 pin — here the grid is a single column */
+  .list-col { grid-column: auto; }
 
   .rail {
     position: fixed; top: var(--topbar-h, 60px); left: 0; bottom: 0; width: var(--rail-w);

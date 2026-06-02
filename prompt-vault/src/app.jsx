@@ -43,8 +43,12 @@ function App() {
 
   const searchRef = uR(null);
   const overflowRef = uR(null);
-  const engine = uM(() => new window.PVSearch(), []);
-  engine.build(prompts);
+  /* Rebuild the search index only when the prompt set changes — not on every
+     render. build() re-tokenizes every prompt's full text (tens of ms once the
+     whole history is ingested), so running it per render put that cost on the
+     critical path of unrelated state changes (e.g. the rail-collapse toggle,
+     stalling the first animation frames). */
+  const engine = uM(() => { const e = new window.PVSearch(); e.build(prompts); return e; }, [prompts]);
 
   /* persistence */
   uE(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(prompts)); } catch {} }, [prompts]);

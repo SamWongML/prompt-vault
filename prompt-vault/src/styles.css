@@ -402,6 +402,14 @@ body {
   padding: 15px 16px 13px; cursor: pointer; position: relative; overflow: hidden;
   transition: border-color .2s var(--ease), box-shadow .25s var(--ease), transform .25s var(--ease), background .2s var(--ease);
   will-change: transform;
+  /* Native virtualization: skip layout/paint for off-screen cards. The whole
+     history auto-ingests into one un-windowed list (hundreds of cards), so the
+     rail-collapse tween (animates .list-col margin) and any resize would reflow
+     every card each frame — O(N) jank. content-visibility bounds that to the
+     viewport. `auto` intrinsic-size seeds an estimate, then caches each card's
+     real height after first paint, so the scrollbar doesn't jump. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
 }
 .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
 .card.sel { border-color: var(--clay-soft); background: var(--raised); box-shadow: var(--shadow-md); }

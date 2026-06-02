@@ -133,7 +133,7 @@ function App() {
      the numbers can never promise more than the list will show (e.g. Pinned
      reads 0 under OpenCode when every pinned prompt is Manual). */
   const counts = uM(() => {
-    const bySource = { all: 0, codex: 0, opencode: 0, manual: 0 };
+    const bySource = { all: 0, codex: 0, opencode: 0, claude: 0, manual: 0 };
     const byStatus = { active: 0, pinned: 0, archived: 0 };
     prompts.forEach((p) => {
       if (!p.archived) { bySource.all++; bySource[p.source] = (bySource[p.source] || 0) + 1; }
@@ -272,7 +272,7 @@ function App() {
 
   const heading = source === "all"
     ? (status === "archived" ? "Archived" : status === "pinned" ? "Pinned" : "All prompts")
-    : ({ codex: "Codex", opencode: "OpenCode", manual: "Manual" }[source]);
+    : ({ codex: "Codex", opencode: "OpenCode", claude: "Claude Code", manual: "Manual" }[source]);
 
   const bodyClass = [
     "body",

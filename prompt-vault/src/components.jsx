@@ -28,6 +28,9 @@ const I = {
   hash: "M4 9h16M4 15h16M10 3L8 21M16 3l-2 18",
   doc: "M6 2h9l5 5v15H6zM15 2v5h5",
   spark: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z",
+  // Claude's mark is a radial sunburst (ideas radiating out); rendered as an
+  // 8-spoke burst in the set's line style — long cardinals, short diagonals.
+  burst: "M14.3 12L20.2 12 M12 9.7L12 3.8 M9.7 12L3.8 12 M12 14.3L12 20.2 M13.6 10.4L16.6 7.4 M10.4 10.4L7.4 7.4 M10.4 13.6L7.4 16.6 M13.6 13.6L16.6 16.6",
   chevron: "M9 6l6 6-6 6",
   panelRight: "M4 5h16v14H4zM15 5v14",
   clock: "M12 7v5l3 2M12 21a9 9 0 100-18 9 9 0 000 18z",
@@ -70,6 +73,7 @@ function highlight(text, terms) {
 const SRC_META = {
   codex:    { label: "codex",    cls: "src-codex",    color: "var(--clay)" },
   opencode: { label: "opencode", cls: "src-opencode", color: "var(--sage)" },
+  claude:   { label: "claude",   cls: "src-claude",   color: "var(--amber)" },
   manual:   { label: "manual",   cls: "src-manual",   color: "var(--text-3)" },
 };
 
@@ -177,6 +181,7 @@ function Rail({ counts, sources, source, setSource, status, setStatus, allTags, 
     ["all", "All prompts", "vault"],
     ["codex", "Codex", "spark"],
     ["opencode", "OpenCode", "layers"],
+    ["claude", "Claude Code", "burst"],
     ["manual", "Manual", "edit"],
   ];
   return (
@@ -185,7 +190,7 @@ function Rail({ counts, sources, source, setSource, status, setStatus, allTags, 
         <div className="label">Library</div>
         {srcRows.map(([k, label, ic]) => (
           <button key={k} className={`nav-item ${source === k ? "on" : ""}`} onClick={() => setSource(k)}>
-            <span className="ico" style={{ color: k === "codex" ? "var(--clay)" : k === "opencode" ? "var(--sage)" : undefined }}>
+            <span className="ico" style={{ color: k === "codex" ? "var(--clay)" : k === "opencode" ? "var(--sage)" : k === "claude" ? "var(--amber)" : undefined }}>
               <Icon d={ic} size={16} />
             </span>
             {label}
@@ -445,6 +450,14 @@ function ImportModal({ onClose, onScan }) {
             <span>
               <div className="st">OpenCode history</div>
               <div className="sd">~/.local/share/opencode/opencode.db</div>
+            </span>
+            <span style={{ marginLeft: "auto", color: "var(--text-3)" }}><Icon d="chevron" size={16} /></span>
+          </button>
+          <button className="src-opt" onClick={() => onScan("claude")}>
+            <span className="si" style={{ background: "var(--amber-wash)", color: "var(--amber)" }}><Icon d="burst" size={20} /></span>
+            <span>
+              <div className="st">Claude Code history</div>
+              <div className="sd">~/.claude/history.jsonl</div>
             </span>
             <span style={{ marginLeft: "auto", color: "var(--text-3)" }}><Icon d="chevron" size={16} /></span>
           </button>

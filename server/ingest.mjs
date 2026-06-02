@@ -115,6 +115,49 @@ export function scanCodex() {
   return out;
 }
 
+/* ---------- Claude Code ---------- */
+const claudeHistoryFile = () => join(homedir(), ".claude", "history.jsonl");
+
+// Claude stores pasted blocks out of line: `display` carries a
+// "[Pasted text #N +M lines]" stub while the real text sits in
+// pastedContents[N].content. Splice it back so we ingest the prompt the user
+// actually wrote, not the stub. Pastes that kept only a contentHash (no
+// content) can't be recovered — their stub is left in place and dropped below.
+const PASTE_STUB = /\[Pasted text #(\w+)[^\]]*\]/g;
+function reifyClaude(display, pasted) {
+  if (!pasted) return display;
+  return display.replace(PASTE_STUB, (m, id) => {
+    const c = pasted[id] && pasted[id].content;
+    return (typeof c === "string" && c) ? c : m;
+  });
+}
+
+export function scanClaude() {
+  const file = claudeHistoryFile();
+  if (!existsSync(file)) return [];
+  let text;
+  try { text = readFileSync(file, "utf8"); } catch { return []; }
+  const out = [], seen = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const s = line.trim();
+    if (!s) continue;
+    let o;
+    try { o = JSON.parse(s); } catch { continue; }
+    const txt = reifyClaude(String(o.display || ""), o.pastedContents).trim();
+    // skip slash commands (CLI meta-inputs) and very short entries
+    if (txt.startsWith("/") || txt.length < 8) continue;
+    // an entry that's *only* an unrecoverable paste stub reifies to bare
+    // "[Pasted text …]" — drop it rather than store the placeholder as a prompt
+    if (!txt.replace(PASTE_STUB, "").trim()) continue;
+    const key = txt.slice(0, 120);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(mkUserPrompt(txt, o.timestamp, o.project || null, "claude"));
+  }
+  out.sort((a, b) => b.createdAt - a.createdAt);
+  return out;
+}
+
 /* ---------- OpenCode ---------- */
 const opencodeDir = () => process.env.OPENCODE_DATA_DIR || join(homedir(), ".local", "share", "opencode");
 
@@ -160,16 +203,18 @@ export async function scanOpenCode() {
   }
 }
 
-// source: "codex" | "opencode" | "all" → { prompts: [...], notes: [...] }
+// source: "codex" | "opencode" | "claude" | "all" → { prompts: [...], notes: [...] }
 export async function scan(source) {
   if (source === "codex") return { prompts: scanCodex(), notes: [] };
+  if (source === "claude") return { prompts: scanClaude(), notes: [] };
   if (source === "opencode") {
     const oc = await scanOpenCode();
     return { prompts: oc.prompts, notes: oc.note ? [oc.note] : [] };
   }
-  const [codex, oc] = await Promise.all([
+  const [codex, claude, oc] = await Promise.all([
     Promise.resolve(scanCodex()),
+    Promise.resolve(scanClaude()),
     scanOpenCode(),
   ]);
-  return { prompts: [...codex, ...oc.prompts], notes: oc.note ? [oc.note] : [] };
+  return { prompts: [...codex, ...claude, ...oc.prompts], notes: oc.note ? [oc.note] : [] };
 }

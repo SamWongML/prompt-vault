@@ -289,12 +289,13 @@ function App() {
   /* Merge prompts the server just ingested into the in-memory view. Dedup +
      tombstone filtering + persistence already happened server-side (see
      store.ingest); these are the genuinely new ones, so we just prepend them.
-     `quiet` (the on-launch auto-scan) leaves the user's current filter untouched. */
-  const mergeAdded = uC((added, src, quiet) => {
+     Ingestion is now always user-initiated (the Ingest popup), so we surface the
+     result and jump the view to the source the user just imported from. */
+  const mergeAdded = uC((added, src) => {
     if (!added.length) return;
     setPrompts((ps) => [...added, ...ps]);
-    toast(`Ingested ${added.length}${quiet ? " new" : ""} prompt${added.length > 1 ? "s" : ""}${quiet ? "" : ` from ${src}`}`, "import");
-    if (!quiet) { setSource(src); setStatus("active"); setActiveTags([]); setQuery(""); }
+    toast(`Ingested ${added.length} prompt${added.length > 1 ? "s" : ""} from ${src}`, "import");
+    setSource(src); setStatus("active"); setActiveTags([]); setQuery("");
   }, [toast]);
 
   /* the local server reads your Codex/OpenCode history off disk, merges anything
@@ -309,15 +310,17 @@ function App() {
       // Node < 22.5) — show why instead of a misleading "no prompts found".
       if (notes && notes.length && !added.length) return toast(notes[0], "x");
       if (!added.length) return toast("Already imported", "check");
-      mergeAdded(added, src, false);
+      mergeAdded(added, src);
     } catch (e) { toast((e && e.message) || "Couldn't read your history", "x"); }
   }, [mergeAdded, toast]);
 
-  /* boot: connect to the server, load the durable vault, then quietly ingest
-     anything new from history. The two steps are sequenced (not two effects) so
-     the load can't race the ingest into showing a prompt twice. If /api/prompts
-     doesn't answer we're a bare file:// page — stay in offline localStorage mode,
-     which loadState() already primed. */
+  /* boot: connect to the server and load the durable vault — that's all the first
+     paint needs. History ingestion used to run automatically here, but it forces a
+     full recursive scan + parse of the entire Codex/Claude/OpenCode history on disk
+     before any new prompt appears, which left first load waiting seconds on real
+     histories. It's now strictly user-initiated (the Ingest popup → scanSource), so
+     the page shows the saved vault immediately. If /api/prompts doesn't answer we're
+     a bare file:// page — stay in offline localStorage mode, which loadState() primed. */
   uE(() => {
     (async () => {
       try {
@@ -332,13 +335,9 @@ function App() {
         } else {
           setPrompts(remote);
         }
-      } catch { return; } // offline mode — nothing more to do
-      try {
-        const { added } = await api.ingest("all");
-        mergeAdded(added, null, true);
-      } catch {}
+      } catch {} // offline mode — nothing more to do
     })();
-  }, [mergeAdded]);
+  }, []); // run once on mount
 
   const SORT_LABELS = { recent: "Recent", uses: "Most used", created: "Newest", az: "A–Z" };
   const cycleSort = () => {

@@ -18,7 +18,9 @@ process.emit = function (name, data, ...rest) {
 };
 
 import { spawn, spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { startServer } from "../server/server.mjs";
+import { dataDir } from "../server/store.mjs";
 
 // node:sqlite powers OpenCode ingestion. On some Node versions it's gated behind
 // --experimental-sqlite, and whether the flag is required (or even still accepted)
@@ -41,7 +43,10 @@ const portIdx = args.indexOf("--port");
 const port = portIdx >= 0 ? args[portIdx + 1] : undefined;
 
 const { url } = await startServer({ port });
-console.log(`\n  Prompt Vault → ${url}\n  Ctrl-C to stop.\n`);
+// Print the on-disk vault path too: the data dir is OS-specific (Library/Application
+// Support on macOS, .local/share on Linux, AppData on Windows), so surfacing it here
+// saves hunting for vault.db in the wrong place.
+console.log(`\n  Prompt Vault → ${url}\n  Vault file   → ${join(dataDir(), "vault.db")}\n  Ctrl-C to stop.\n`);
 if (!noOpen) openBrowser(url);
 
 function openBrowser(target) {

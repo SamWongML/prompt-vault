@@ -108,6 +108,15 @@ ${css}
 <body>
 <div id="root"></div>
 
+<!-- Initial vault snapshot. The CLI server rewrites the sentinel below with the
+     live vault before serving (see server.mjs), so the app's first render already
+     has the real prompts — no fetch-on-mount round-trip, data is there at first
+     paint (the __NEXT_DATA__ / Remix-context pattern). Left untouched when the file
+     is opened bare (file://): the sentinel isn't valid JSON, so the app parses it
+     to null and falls back to its offline localStorage mode. type=application/json
+     so the browser never executes it; the app reads it via textContent + JSON.parse. -->
+<script id="pv-bootstrap" type="application/json">/*PV_BOOTSTRAP*/</script>
+
 <!-- React + ReactDOM (production UMD), inlined for offline portability -->
 <script>${react}</script>
 

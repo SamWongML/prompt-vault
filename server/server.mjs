@@ -23,6 +23,17 @@ import * as store from "./store.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HTML = join(ROOT, "prompt-vault", "Prompt Vault.html");
 
+// The placeholder the build leaves in the HTML; we swap it for the live vault so
+// the page renders real data on first paint instead of fetching it after mount.
+const BOOTSTRAP_SENTINEL = "/*PV_BOOTSTRAP*/";
+
+// Serialize the bootstrap payload for embedding in a <script> tag. Escaping `<`
+// is what stops a prompt containing "</script>" from breaking out of the tag (the
+// well-known XSS/injection guard React, Next.js et al. apply to inlined state).
+function embedJson(obj) {
+  return JSON.stringify(obj).replace(/</g, "\\u003c");
+}
+
 // preferred port, then a small range — first free one wins (no config needed)
 const PORT_RANGE = Array.from({ length: 20 }, (_, i) => 7331 + i);
 
@@ -72,7 +83,13 @@ async function handle(req, res) {
       return json(res, 200, await scan(url.searchParams.get("source") || "all"));
     }
     if (pathname === "/" || pathname === "/index.html") {
-      return send(res, 200, "text/html; charset=utf-8", await readFile(HTML, "utf8"));
+      // Inline the live vault into the page so it paints with real data and skips
+      // the /api/prompts round-trip. Mirrors the GET /api/prompts shape so the
+      // client's boot path is identical whether it reads the bootstrap or fetches.
+      // Function replacement (not a string) keeps `$` in prompt text literal.
+      const html = await readFile(HTML, "utf8");
+      const payload = embedJson({ prompts: await store.getAll(), dataDir: store.dataDir() });
+      return send(res, 200, "text/html; charset=utf-8", html.replace(BOOTSTRAP_SENTINEL, () => payload));
     }
     send(res, 404, "text/plain", "Not found");
   } catch (err) {

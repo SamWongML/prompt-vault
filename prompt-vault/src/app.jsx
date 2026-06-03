@@ -16,16 +16,30 @@ function loadState() {
   return window.PV_SEED;
 }
 
-/* The graveyard. Ingestion re-reads the append-only CLI history on every launch,
-   so a prompt deleted from the vault is still sitting in the source file and would
-   be re-imported on the next scan — the prompt "comes back from the dead". We fix
-   that by remembering, by content-hash, what the user deleted, and skipping those
-   on every merge (see addPrompts). The set is tiny (just hashes) and lives under
-   its own key, so it persists even when the main vault blob can't. */
+/* Hashes of prompts the user deleted, so a history re-scan can't resurrect them.
+   The vault is server-authoritative now and the server owns the live tombstones
+   (a SQLite table); this browser-side set survives only to hand earlier deletions
+   — recorded back when the vault lived in localStorage — up to the server once,
+   during the one-time migration. */
 function loadTombstones() {
   try { const a = JSON.parse(localStorage.getItem(LS_TOMB)); if (Array.isArray(a)) return new Set(a); } catch {}
   return new Set();
 }
+
+/* The vault has two homes. When the page is served by the local CLI server, that
+   server is the source of truth: prompts live in SQLite on disk (durable, port-
+   independent, no 5 MB cap) and every change is a small /api call. When the file
+   is opened directly (file://, no server), there's no API and no history to ingest,
+   so we fall back to the old localStorage store. boot() probes which world we're in;
+   `server` flips to true only once /api/prompts answers. */
+const api = {
+  load: () => fetch("/api/prompts").then((r) => (r.ok ? r.json() : Promise.reject(r.status))),
+  post: (prompts) => fetch("/api/prompts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompts }) }),
+  patch: (id, patch) => fetch(`/api/prompts/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) }),
+  del: (id) => fetch(`/api/prompts/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  ingest: (src) => fetch(`/api/ingest?source=${src}`, { method: "POST" }).then((r) => (r.ok ? r.json() : Promise.reject(r.status))),
+  import: (prompts, tombstones) => fetch("/api/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompts, tombstones }) }),
+};
 
 /* the user's saved choice for the docked rail (desktop). It's the durable half of
    the sidebar's two-faced state: on desktop railOpen mirrors this, on narrow widths
@@ -77,18 +91,10 @@ function App() {
   const searchRef = uR(null);
   const overflowRef = uR(null);
   const themeReady = uR(false); // <head> script set data-theme pre-paint; skip the flip-snap on mount
-  /* Deleted-content hashes, held in a ref (not state) on purpose: the only reader
-     is addPrompts and the only writer is delete, so this drives no render — and
-     keeping it out of addPrompts' deps stops a delete from re-firing the launch
-     auto-scan effect. Initialised once from localStorage. */
-  const tombRef = uR(null);
-  if (tombRef.current === null) tombRef.current = loadTombstones();
-  const tombstone = uC((content) => {
-    const k = window.pvHash(content);
-    if (!k) return;
-    tombRef.current.add(k);
-    try { localStorage.setItem(LS_TOMB, JSON.stringify([...tombRef.current])); } catch {}
-  }, []);
+  /* Which world are we in (see the `api` note above)? A ref, not state: it's read
+     inside mutation callbacks and the persistence effect, and flipping it must not
+     re-run effects that key off prompts. boot() sets it true once the server answers. */
+  const server = uR(false);
   /* Rebuild the search index only when the prompt set changes — not on every
      render. build() re-tokenizes every prompt's full text (tens of ms once the
      whole history is ingested), so running it per render put that cost on the
@@ -96,8 +102,10 @@ function App() {
      stalling the first animation frames). */
   const engine = uM(() => { const e = new window.PVSearch(); e.build(prompts); return e; }, [prompts]);
 
-  /* persistence */
-  uE(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(prompts)); } catch {} }, [prompts]);
+  /* persistence (offline mode only — in server mode each mutation is its own
+     /api call, so mirroring the whole array to localStorage would just re-introduce
+     the 5 MB cap and the write-amplification we moved to SQLite to escape). */
+  uE(() => { if (server.current) return; try { localStorage.setItem(LS_KEY, JSON.stringify(prompts)); } catch {} }, [prompts]);
   uE(() => {
     localStorage.setItem(LS_THEME, theme);
     /* the <head> bootstrap already set data-theme before first paint, so the
@@ -245,83 +253,92 @@ function App() {
      A normal scrim/Esc close keeps the selection, so its content stays put. */
   uE(() => { if (!selected) setDetailMobileOpen(false); }, [selected]);
 
-  /* mutations */
+  /* mutations — optimistic in memory, then persisted. In server mode each one is a
+     granular /api write (one row); in offline mode the localStorage effect above
+     catches the state change. */
   const update = uC((id, patch, silent) => {
     setPrompts((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    if (server.current) api.patch(id, patch);
   }, []);
 
   const action = uC((kind, p) => {
     if (kind === "pin") { update(p.id, { pinned: !p.pinned }); toast(p.pinned ? "Unpinned" : "Pinned to top", "pin"); }
     else if (kind === "archive") { update(p.id, { archived: !p.archived }); toast(p.archived ? "Restored" : "Archived", "archive"); }
     else if (kind === "delete") {
-      tombstone(p.content); // remember it's gone, so a re-scan can't resurrect it
+      // server mode tombstones the content server-side so a re-scan can't revive it;
+      // offline mode has no history ingestion, so plain removal is enough.
+      if (server.current) api.del(p.id);
       setPrompts((ps) => ps.filter((x) => x.id !== p.id)); toast("Deleted", "trash");
     } else if (kind === "duplicate") {
       const copy = { ...p, id: window.uid(), title: p.title + " (copy)", pinned: false, useCount: 0, createdAt: Date.now(), lastUsed: Date.now() };
       setPrompts((ps) => { const i = ps.findIndex((x) => x.id === p.id); const n = [...ps]; n.splice(i + 1, 0, copy); return n; });
+      if (server.current) api.post([copy]);
       setSelId(copy.id); toast("Duplicated", "dup");
     }
-  }, [update, toast, tombstone]);
+  }, [update, toast]);
 
   const newPrompt = uC(() => {
     const p = window.pvMk({ title: "New prompt", content: "Write your prompt here. Use {{variables}} for fill-ins.", source: "manual", tags: [] });
     setPrompts((ps) => [p, ...ps]);
+    if (server.current) api.post([p]);
     setSource("all"); setStatus("active"); setActiveTags([]); setQuery("");
     setSelId(p.id); setDetailMobileOpen(true);
     toast("Draft created", "plus");
   }, [toast]);
 
-  /* ingestion — merge already-built prompt objects, keeping only fresh ones.
-     `quiet` is for the on-launch auto-scan: it stays silent unless it finds
-     something new, and leaves the user's current view/filter untouched. */
-  const addPrompts = uC((parsed, src, quiet) => {
-    if (!parsed.length) { if (!quiet) toast("No user prompts found", "x"); return; }
-    setPrompts((ps) => {
-      const tomb = tombRef.current;
-      const existing = new Set(ps.map((p) => window.pvHash(p.content)));
-      // dedup against the vault *and* within this batch — an all-source scan can
-      // return the same prompt twice (e.g. typed in both Claude and Codex) — and
-      // drop anything the user has deleted, so re-scanning history won't revive it.
-      const fresh = parsed.filter((p) => {
-        const k = window.pvHash(p.content);
-        if (tomb.has(k) || existing.has(k)) return false;
-        existing.add(k);
-        return true;
-      });
-      if (!fresh.length) { if (!quiet) toast("Already imported", "check"); return ps; }
-      setTimeout(() => toast(`Ingested ${fresh.length} prompt${fresh.length > 1 ? "s" : ""} from ${src}`, "import"), 0);
-      if (!quiet) { setSource(src); setStatus("active"); setActiveTags([]); setQuery(""); }
-      return [...fresh, ...ps];
-    });
+  /* Merge prompts the server just ingested into the in-memory view. Dedup +
+     tombstone filtering + persistence already happened server-side (see
+     store.ingest); these are the genuinely new ones, so we just prepend them.
+     `quiet` (the on-launch auto-scan) leaves the user's current filter untouched. */
+  const mergeAdded = uC((added, src, quiet) => {
+    if (!added.length) return;
+    setPrompts((ps) => [...added, ...ps]);
+    toast(`Ingested ${added.length}${quiet ? " new" : ""} prompt${added.length > 1 ? "s" : ""}${quiet ? "" : ` from ${src}`}`, "import");
+    if (!quiet) { setSource(src); setStatus("active"); setActiveTags([]); setQuery(""); }
   }, [toast]);
 
-  /* the local server reads your Codex/OpenCode history off disk and hands back
-     already-built prompt objects — we just merge them. No file picker. */
+  /* the local server reads your Codex/OpenCode history off disk, merges anything
+     new into the vault, and hands back what it added. No file picker. */
   const scanSource = uC(async (src) => {
     setShowImport(false);
+    if (!server.current) return toast("History ingestion needs the local server — run `prompt-vault`.", "x");
     try {
       toast("Reading your history…", "import");
-      const res = await fetch(`/api/scan?source=${src}`);
-      if (!res.ok) throw new Error((await res.text().catch(() => "")) || "Couldn't read your history");
-      const { prompts: found, notes } = await res.json();
+      const { added, notes } = await api.ingest(src);
       // a note with nothing found = the source was unavailable (e.g. OpenCode on
       // Node < 22.5) — show why instead of a misleading "no prompts found".
-      if (notes && notes.length && !found.length) return toast(notes[0], "x");
-      addPrompts(found, src);
-    } catch (e) { toast(e.message || "Couldn't read your history", "x"); }
-  }, [addPrompts, toast]);
+      if (notes && notes.length && !added.length) return toast(notes[0], "x");
+      if (!added.length) return toast("Already imported", "check");
+      mergeAdded(added, src, false);
+    } catch (e) { toast((e && e.message) || "Couldn't read your history", "x"); }
+  }, [mergeAdded, toast]);
 
-  /* auto-ingest on launch — quietly pull anything new out of local history */
+  /* boot: connect to the server, load the durable vault, then quietly ingest
+     anything new from history. The two steps are sequenced (not two effects) so
+     the load can't race the ingest into showing a prompt twice. If /api/prompts
+     doesn't answer we're a bare file:// page — stay in offline localStorage mode,
+     which loadState() already primed. */
   uE(() => {
     (async () => {
       try {
-        const res = await fetch("/api/scan?source=all");
-        if (!res.ok) return;
-        const { prompts: found } = await res.json();
-        addPrompts(found, "history", true);
+        const { prompts: remote } = await api.load();
+        server.current = true;
+        // first run after upgrading from the localStorage era: hand the old vault
+        // (and its deletion tombstones) up to the server, once, while it's empty.
+        const local = loadState();
+        if (!remote.length && local.length) {
+          await api.import(local, [...loadTombstones()]).catch(() => {});
+          setPrompts(local);
+        } else {
+          setPrompts(remote);
+        }
+      } catch { return; } // offline mode — nothing more to do
+      try {
+        const { added } = await api.ingest("all");
+        mergeAdded(added, null, true);
       } catch {}
     })();
-  }, [addPrompts]);
+  }, [mergeAdded]);
 
   const SORT_LABELS = { recent: "Recent", uses: "Most used", created: "Newest", az: "A–Z" };
   const cycleSort = () => {

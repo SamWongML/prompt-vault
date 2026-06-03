@@ -54,11 +54,25 @@ The **CLI + server** layer (added when the app became an npm package) lives _out
   if `node:sqlite` needs it, parses `--no-open`/`--port`, calls `startServer`, opens the
   browser.
 - `server/server.mjs` — `node:http` server (no Express). Serves the built HTML at `/`,
-  exposes `GET /api/scan?source=codex|opencode|all`. Picks the first free port in
-  7331–7350 unless `--port` is given.
+  the durable vault under `GET/POST/PATCH/DELETE /api/prompts`, history merge at
+  `POST /api/ingest`, and the old read-only `GET /api/scan`. Picks the first free port
+  in 7331–7350 unless `--port` is given.
+- `server/store.mjs` — **the canonical vault**: a single SQLite file (`vault.db`, via
+  built-in `node:sqlite`) under the OS app-data dir (`~/.local/share/prompt-vault-nodejs`
+  etc.; override with `PROMPT_VAULT_DATA_DIR`). Replaced browser localStorage as the
+  source of truth — it was origin/port-scoped, ~5 MB-capped, and dropped writes silently.
+  Owns deletion **tombstones** so a history re-scan can't resurrect deleted prompts, and
+  versions its schema with `PRAGMA user_version`. **Search stays in the browser**
+  (`src/search.js`); `node:sqlite` has no FTS5 and an in-memory scan is plenty fast here.
 - `server/ingest.mjs` — history extraction (no HTTP). `scanCodex()` reads
   `~/.codex/sessions/**/*.jsonl`; `scanOpenCode()` reads `~/.local/share/opencode/opencode.db`
   via built-in `node:sqlite`.
+
+The browser is now server-authoritative when launched via the CLI: `app.jsx` `boot()`
+probes `/api/prompts`, loads the vault, migrates any old localStorage data up once, then
+ingests. Opened bare (`file://`, no server) it falls back to the legacy localStorage store.
+`window.pvHash` (`src/data.js`) and `pvHash` (`server/store.mjs`) **must stay identical** —
+migrated tombstones are matched across the two.
 
 ## Conventions (match these)
 

@@ -4,14 +4,21 @@
    Codex/OpenCode history off disk. Dependency-free (node: only).
 
    Routes:
-     GET /                         → the app (built "Prompt Vault.html")
-     GET /api/scan?source=codex    → { prompts: [...] }  (codex|opencode|claude|all)
+     GET    /                       → the app (built "Prompt Vault.html")
+     GET    /api/prompts            → { prompts: [...] }  (the durable vault)
+     POST   /api/prompts            → upsert { prompts: [...] }  (create/duplicate)
+     PATCH  /api/prompts/:id        → patch one prompt   (edit/pin/archive/use)
+     DELETE /api/prompts/:id        → delete + tombstone one prompt
+     POST   /api/ingest?source=all  → scan history, merge new → { added, notes }
+     POST   /api/import             → one-time { prompts, tombstones } migration
+     GET    /api/scan?source=codex  → { prompts: [...] }  (raw history, read-only)
    ============================================================ */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { scan } from "./ingest.mjs";
+import * as store from "./store.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HTML = join(ROOT, "prompt-vault", "Prompt Vault.html");
@@ -23,15 +30,48 @@ function send(res, status, type, body) {
   res.writeHead(status, { "content-type": type, "cache-control": "no-store" });
   res.end(body);
 }
+const json = (res, status, obj) => send(res, status, "application/json", JSON.stringify(obj));
+
+// read + parse a JSON request body, with a sane cap so a runaway upload can't
+// balloon memory (the migration POST can legitimately carry the whole vault).
+function readJson(req) {
+  return new Promise((resolve, reject) => {
+    let b = "";
+    req.on("data", (c) => { b += c; if (b.length > 64 * 1024 * 1024) reject(new Error("body too large")); });
+    req.on("end", () => { try { resolve(b ? JSON.parse(b) : {}); } catch (e) { reject(e); } });
+    req.on("error", reject);
+  });
+}
 
 async function handle(req, res) {
   const url = new URL(req.url, "http://localhost");
+  const { pathname } = url;
+  const method = req.method;
   try {
-    if (url.pathname === "/api/scan") {
-      const data = await scan(url.searchParams.get("source") || "all");
-      return send(res, 200, "application/json", JSON.stringify(data));
+    // the durable vault — single prompt addressed as /api/prompts/:id
+    const one = pathname.match(/^\/api\/prompts\/(.+)$/);
+    if (one) {
+      const id = decodeURIComponent(one[1]);
+      if (method === "PATCH") { await store.patchOne(id, await readJson(req)); return json(res, 200, { ok: true }); }
+      if (method === "DELETE") { await store.removeOne(id); return json(res, 200, { ok: true }); }
+      return send(res, 405, "text/plain", "Method not allowed");
     }
-    if (url.pathname === "/" || url.pathname === "/index.html") {
+    if (pathname === "/api/prompts") {
+      if (method === "GET") return json(res, 200, { prompts: await store.getAll(), dataDir: store.dataDir() });
+      if (method === "POST") { await store.upsert((await readJson(req)).prompts || []); return json(res, 200, { ok: true }); }
+      return send(res, 405, "text/plain", "Method not allowed");
+    }
+    if (pathname === "/api/ingest" && method === "POST") {
+      return json(res, 200, await store.ingest(url.searchParams.get("source") || "all"));
+    }
+    if (pathname === "/api/import" && method === "POST") {
+      const { prompts, tombstones } = await readJson(req);
+      return json(res, 200, await store.importInitial(prompts || [], tombstones || []));
+    }
+    if (pathname === "/api/scan") {
+      return json(res, 200, await scan(url.searchParams.get("source") || "all"));
+    }
+    if (pathname === "/" || pathname === "/index.html") {
       return send(res, 200, "text/html; charset=utf-8", await readFile(HTML, "utf8"));
     }
     send(res, 404, "text/plain", "Not found");

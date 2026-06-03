@@ -16,6 +16,30 @@ function loadState() {
   return window.PV_SEED;
 }
 
+/* The vault snapshot the CLI server inlined into the page (see the #pv-bootstrap
+   note in build.mjs / server.mjs). Reading it synchronously lets the very first
+   render show real prompts — no fetch-on-mount waterfall. Returns null when the
+   page is opened bare (file://), where the sentinel isn't valid JSON: that's the
+   signal we're offline, so the app stays in localStorage mode. A *present* payload
+   (even with an empty prompts[]) means the server answered, so it doubles as the
+   "server mode" flag and lets boot() skip the /api/prompts round-trip. */
+function readBootstrap() {
+  try {
+    const el = document.getElementById("pv-bootstrap");
+    const data = el && JSON.parse(el.textContent);
+    return data && Array.isArray(data.prompts) ? data : null;
+  } catch { return null; }
+}
+
+/* First-render prompts: prefer the server's inlined snapshot, so a populated vault
+   paints immediately. An empty snapshot (fresh install, or first run after the
+   localStorage→SQLite upgrade) falls through to loadState() — that shows any
+   pending localStorage vault at once, which boot() then migrates up and reconciles. */
+function initialPrompts() {
+  const b = readBootstrap();
+  return b && b.prompts.length ? b.prompts : loadState();
+}
+
 /* Hashes of prompts the user deleted, so a history re-scan can't resurrect them.
    The vault is server-authoritative now and the server owns the live tombstones
    (a SQLite table); this browser-side set survives only to hand earlier deletions
@@ -68,7 +92,7 @@ function applyTheme(theme) {
 }
 
 function App() {
-  const [prompts, setPrompts] = uS(loadState);
+  const [prompts, setPrompts] = uS(initialPrompts);
   const [theme, setTheme] = uS(() => localStorage.getItem(LS_THEME) || "light");
   const [query, setQuery] = uS("");
   const [mode, setMode] = uS("hybrid");
@@ -314,20 +338,42 @@ function App() {
     } catch (e) { toast((e && e.message) || "Couldn't read your history", "x"); }
   }, [mergeAdded, toast]);
 
-  /* boot: connect to the server and load the durable vault — that's all the first
-     paint needs. History ingestion used to run automatically here, but it forces a
-     full recursive scan + parse of the entire Codex/Claude/OpenCode history on disk
-     before any new prompt appears, which left first load waiting seconds on real
-     histories. It's now strictly user-initiated (the Ingest popup → scanSource), so
-     the page shows the saved vault immediately. If /api/prompts doesn't answer we're
-     a bare file:// page — stay in offline localStorage mode, which loadState() primed. */
+  /* boot: settle which world we're in and reconcile the durable vault.
+
+     The fast path needs no network at all: the CLI server inlines the vault into
+     the page (#pv-bootstrap), so a populated vault is already on screen from the
+     first render — boot just flips the server flag and we're done. This kills the
+     old fetch-on-mount waterfall, where the page painted an empty state and only
+     showed real data after a second /api/prompts round-trip resolved.
+
+     Two cases still need an async step:
+       • server mode, empty vault → first run after the localStorage→SQLite upgrade:
+         hand the old localStorage vault (+ its deletion tombstones) up to the
+         server once, while it's still empty.
+       • no bootstrap (a bare file:// page, or HTML served without injection) →
+         fall back to probing /api/prompts: it answers under the CLI server (older
+         build, no sentinel) and fails on file://, where we stay in localStorage mode.
+
+     History ingestion deliberately does NOT run here — it forces a full recursive
+     scan of the entire Codex/Claude/OpenCode history on disk, which once left first
+     load waiting seconds. It's strictly user-initiated now (Ingest popup → scanSource). */
   uE(() => {
     (async () => {
+      const boot = readBootstrap();
+      if (boot) {
+        // server answered in-page — no round-trip. initialPrompts() already
+        // rendered boot.prompts when non-empty; only the empty-vault migration is left.
+        server.current = true;
+        const local = loadState();
+        if (!boot.prompts.length && local.length) {
+          await api.import(local, [...loadTombstones()]).catch(() => {});
+          setPrompts(local);
+        }
+        return;
+      }
       try {
         const { prompts: remote } = await api.load();
         server.current = true;
-        // first run after upgrading from the localStorage era: hand the old vault
-        // (and its deletion tombstones) up to the server, once, while it's empty.
         const local = loadState();
         if (!remote.length && local.length) {
           await api.import(local, [...loadTombstones()]).catch(() => {});

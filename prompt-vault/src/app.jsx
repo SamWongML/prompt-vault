@@ -6,6 +6,7 @@ const { useState: uS, useEffect: uE, useRef: uR, useMemo: uM, useCallback: uC } 
 const LS_KEY = "promptVault.v1";
 const LS_THEME = "promptVault.theme";
 const LS_RAIL = "promptVault.rail"; // docked-sidebar collapse preference
+const LS_TOMB = "promptVault.tombstones.v1"; // content-hashes of prompts the user deleted
 
 function loadState() {
   try {
@@ -13,6 +14,17 @@ function loadState() {
     if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr) && arr.length) return arr; }
   } catch {}
   return window.PV_SEED;
+}
+
+/* The graveyard. Ingestion re-reads the append-only CLI history on every launch,
+   so a prompt deleted from the vault is still sitting in the source file and would
+   be re-imported on the next scan — the prompt "comes back from the dead". We fix
+   that by remembering, by content-hash, what the user deleted, and skipping those
+   on every merge (see addPrompts). The set is tiny (just hashes) and lives under
+   its own key, so it persists even when the main vault blob can't. */
+function loadTombstones() {
+  try { const a = JSON.parse(localStorage.getItem(LS_TOMB)); if (Array.isArray(a)) return new Set(a); } catch {}
+  return new Set();
 }
 
 /* the user's saved choice for the docked rail (desktop). It's the durable half of
@@ -65,6 +77,18 @@ function App() {
   const searchRef = uR(null);
   const overflowRef = uR(null);
   const themeReady = uR(false); // <head> script set data-theme pre-paint; skip the flip-snap on mount
+  /* Deleted-content hashes, held in a ref (not state) on purpose: the only reader
+     is addPrompts and the only writer is delete, so this drives no render — and
+     keeping it out of addPrompts' deps stops a delete from re-firing the launch
+     auto-scan effect. Initialised once from localStorage. */
+  const tombRef = uR(null);
+  if (tombRef.current === null) tombRef.current = loadTombstones();
+  const tombstone = uC((content) => {
+    const k = window.pvHash(content);
+    if (!k) return;
+    tombRef.current.add(k);
+    try { localStorage.setItem(LS_TOMB, JSON.stringify([...tombRef.current])); } catch {}
+  }, []);
   /* Rebuild the search index only when the prompt set changes — not on every
      render. build() re-tokenizes every prompt's full text (tens of ms once the
      whole history is ingested), so running it per render put that cost on the
@@ -230,13 +254,14 @@ function App() {
     if (kind === "pin") { update(p.id, { pinned: !p.pinned }); toast(p.pinned ? "Unpinned" : "Pinned to top", "pin"); }
     else if (kind === "archive") { update(p.id, { archived: !p.archived }); toast(p.archived ? "Restored" : "Archived", "archive"); }
     else if (kind === "delete") {
+      tombstone(p.content); // remember it's gone, so a re-scan can't resurrect it
       setPrompts((ps) => ps.filter((x) => x.id !== p.id)); toast("Deleted", "trash");
     } else if (kind === "duplicate") {
       const copy = { ...p, id: window.uid(), title: p.title + " (copy)", pinned: false, useCount: 0, createdAt: Date.now(), lastUsed: Date.now() };
       setPrompts((ps) => { const i = ps.findIndex((x) => x.id === p.id); const n = [...ps]; n.splice(i + 1, 0, copy); return n; });
       setSelId(copy.id); toast("Duplicated", "dup");
     }
-  }, [update, toast]);
+  }, [update, toast, tombstone]);
 
   const newPrompt = uC(() => {
     const p = window.pvMk({ title: "New prompt", content: "Write your prompt here. Use {{variables}} for fill-ins.", source: "manual", tags: [] });
@@ -252,12 +277,14 @@ function App() {
   const addPrompts = uC((parsed, src, quiet) => {
     if (!parsed.length) { if (!quiet) toast("No user prompts found", "x"); return; }
     setPrompts((ps) => {
-      const existing = new Set(ps.map((p) => p.content.slice(0, 120)));
+      const tomb = tombRef.current;
+      const existing = new Set(ps.map((p) => window.pvHash(p.content)));
       // dedup against the vault *and* within this batch — an all-source scan can
-      // return the same prompt twice (e.g. typed in both Claude and Codex).
+      // return the same prompt twice (e.g. typed in both Claude and Codex) — and
+      // drop anything the user has deleted, so re-scanning history won't revive it.
       const fresh = parsed.filter((p) => {
-        const k = p.content.slice(0, 120);
-        if (existing.has(k)) return false;
+        const k = window.pvHash(p.content);
+        if (tomb.has(k) || existing.has(k)) return false;
         existing.add(k);
         return true;
       });
